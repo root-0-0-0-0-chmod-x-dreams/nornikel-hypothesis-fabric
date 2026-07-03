@@ -4,9 +4,9 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import List
 
-from docling.document_converter import DocumentConverter
+import opendataloader_pdf
 
 from app.image_manager import get_image_manager
 from app.models import ConvertResult
@@ -20,42 +20,66 @@ def convert_pdf(file_path: Path, original_filename: str) -> ConvertResult:
     warnings: List[str] = []
 
     try:
-        converter = DocumentConverter()
-        result = converter.convert(str(file_path))
-        md_text = result.document.export_to_markdown()
-
-        image_manager = get_image_manager()
-
-        doc_images_dir = file_path.parent / file_path.stem
-        images_extracted = 0
-
-        if doc_images_dir.exists() and doc_images_dir.is_dir():
-            md_text, images_extracted = image_manager.rewrite_markdown_images(
-                md_content=md_text,
-                source_images_dir=doc_images_dir,
-                prefix="pdf",
+        temp_output_dir = Path(tempfile.mkdtemp(prefix="odl_output_"))
+        try:
+            opendataloader_pdf.convert(
+                input_path=[str(file_path)],
+                output_dir=str(temp_output_dir),
+                format="markdown",
+                image_output="external",
+                image_format="jpeg",
             )
-            shutil.rmtree(doc_images_dir, ignore_errors=True)
 
-        return ConvertResult(
-            success=True,
-            original_filename=original_filename,
-            file_type=FileType.PDF.value,
-            markdown_content=md_text,
-            images_extracted=images_extracted,
-            warnings=warnings,
-            metadata={"pages": getattr(result.document, "num_pages", None)},
-        )
+            md_candidate = temp_output_dir / f"{file_path.stem}.md"
+            if not md_candidate.exists():
+                md_files = list(temp_output_dir.glob("*.md"))
+                if md_files:
+                    md_candidate = md_files[0]
+
+            if not md_candidate.exists():
+                return ConvertResult(
+                    success=False,
+                    original_filename=original_filename,
+                    file_type=FileType.PDF.value,
+                    errors=["No markdown output produced by opendataloader"],
+                )
+
+            md_content = md_candidate.read_text(encoding="utf-8")
+
+            image_manager = get_image_manager()
+            images_extracted = 0
+
+            images_dir = temp_output_dir / f"{file_path.stem}_images"
+            if not images_dir.exists():
+                images_dir = temp_output_dir / "images"
+
+            if images_dir.exists() and images_dir.is_dir():
+                md_content, images_extracted = image_manager.rewrite_markdown_images(
+                    md_content=md_content,
+                    source_images_dir=images_dir,
+                    prefix="pdf",
+                )
+
+            return ConvertResult(
+                success=True,
+                original_filename=original_filename,
+                file_type=FileType.PDF.value,
+                markdown_content=md_content,
+                images_extracted=images_extracted,
+                warnings=warnings,
+            )
+
+        finally:
+            shutil.rmtree(temp_output_dir, ignore_errors=True)
 
     except ImportError:
-        _fallback = _try_pdf_fallback(file_path, original_filename)
-        if _fallback:
-            return _fallback
         return ConvertResult(
             success=False,
             original_filename=original_filename,
             file_type=FileType.PDF.value,
-            errors=["docling not installed. Install: pip install docling"],
+            errors=[
+                "opendataloader-pdf not installed. Install: pip install opendataloader-pdf"
+            ],
         )
     except Exception as e:
         logger.exception("pdf_conversion_failed")
@@ -66,38 +90,3 @@ def convert_pdf(file_path: Path, original_filename: str) -> ConvertResult:
             file_type=FileType.PDF.value,
             errors=errors,
         )
-
-
-def _try_pdf_fallback(file_path: Path, original_filename: str) -> ConvertResult | None:
-    try:
-        import fitz
-        doc = fitz.open(str(file_path))
-        md_parts = []
-        image_manager = get_image_manager()
-        images_extracted = 0
-
-        for page_num, page in enumerate(doc, 1):
-            md_parts.append(f"\n## Page {page_num}\n")
-            md_parts.append(page.get_text())
-
-            for img_index, img in enumerate(page.get_images(full=True)):
-                xref = img[0]
-                base_image = doc.extract_image(xref)
-                if base_image:
-                    img_bytes = base_image["image"]
-                    ext = base_image["ext"]
-                    ref = image_manager.add_image_bytes(img_bytes, ext, "pdf")
-                    images_extracted += 1
-                    md_parts.append(f"![page_{page_num}_img_{img_index}]({ref})\n")
-
-        doc.close()
-        return ConvertResult(
-            success=True,
-            original_filename=original_filename,
-            file_type=FileType.PDF.value,
-            markdown_content="\n".join(md_parts),
-            images_extracted=images_extracted,
-            metadata={"pages": page_num},
-        )
-    except ImportError:
-        return None

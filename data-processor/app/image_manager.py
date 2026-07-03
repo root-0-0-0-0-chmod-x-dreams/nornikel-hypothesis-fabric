@@ -63,6 +63,8 @@ class ImageManager:
             alt_text = match.group(1)
             img_ref = match.group(2)
 
+            img_ref = img_ref.strip().strip("<>")
+
             if img_ref.startswith(("http://", "https://", "data:")):
                 return match.group(0)
 

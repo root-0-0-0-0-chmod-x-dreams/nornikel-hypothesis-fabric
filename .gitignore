@@ -2,3 +2,6 @@ local-data/
 external-data/
 */.env
 __pycache__/
+temp/
+images/
+test*
