@@ -1,5 +1,221 @@
 # Фабрика гипотез
 
+## Архитектура
+%% flowchart TD
+%%     %% Настройки стилей
+%%     classDef default fill:#fff,stroke:#333,stroke-width:1.5px,color:#000,rx:10,ry:10;
+%%     classDef db fill:#fff,stroke:#333,stroke-width:1.5px,shape:cylinder;
+%%     classDef folder fill:#fff,stroke:#333,stroke-width:1.5px,shape:folder;
+%%     classDef dashedBox fill:none,stroke:#333,stroke-width:1.5px,stroke-dasharray: 5 5;
+%%     classDef dashedBoxOrange fill:none,stroke:#f90,stroke-width:1.5px,stroke-dasharray: 5 5;
+%%     classDef transparent fill:none,stroke:#333,stroke-width:1.5px,rx:10,ry:10;
+
+%%     %% --- ЛЕВАЯ ЧАСТЬ (Источники данных и обработка) ---
+    
+%%     WebRet["<b>Ретрив страницы из интернета</b><br>- undetectable chromedriver<br>загрузка страницы<br>- анализ DOM, выделение<br>значимых блоков<br>- сбор текста, преобразование<br>в Markdown"]
+    
+%%     DataMD["<b>Данные в Markdown</b><br><br>* документы из<br>PDF с opendataloader<br>Word с docx2md<br>Excel с openpyxl + pandas<br><br>* PNG/JPG сохраняются в md<br>с одной единственной<br>ссылкой на картинку"]
+    
+%%     Chunker["<b>Чанкер</b><br>* очистка regexp<br>  - пробелы, отступы<br><i>* картинка -></i><br><i>-> текстовое</i><br><i>представление</i><br><i>* разметка чанка</i><br>  - Summary<br>  - Questions<br>* metadata<br>  - Заголовок<br>  - Подзаголовок<br>  - имя файла<br>  - название фабрики"]
+    
+%%     ImageFolder[/"Папка с картинками"/]:::folder
+
+%%     WebRet --> DataMD
+%%     DataMD --> Chunker
+%%     Chunker -. "внутренний<br>URL картинки" .-> ImageFolder
+
+%%     %% --- ЦЕНТРАЛЬНАЯ ЧАСТЬ (Очередь и БД) ---
+
+%%     RabbitMQ[("очередь (Rabbit MQ)")]:::db
+%%     VectorDB[("<b>Векторная БД</b><br>* Гибридный поиск<br>BM-25 + embed<br>* Единая структура<br>хранения чанка")]:::db
+
+%%     Chunker -- "размеченный<br>чанк" --> RabbitMQ
+%%     RabbitMQ -- "размеченный<br>чанк" --> VectorDB
+%%     VectorDB -- "status OK/ERROR" --> RabbitMQ
+
+%%     %% --- ПРАВАЯ ВЕРХНЯЯ ЧАСТЬ (GraphRAG) ---
+
+%%     subgraph GraphRAG_Group [ ]
+%%         style GraphRAG_Group fill:none,stroke:#333,stroke-width:1.5px,rx:15,ry:15
+        
+%%         FilterGraph["фильтруем<br>graph ноды"]
+%%         GraphQuery["<b>graph_query</b><br>traverse 2-3 hop<br>получаем path + node_ids[]"]
+%%         DenseTopK["Dense top-k"]
+%%         BM25TopK["BM25 top-k"]
+%%         RRFFusion{"RRF Fusion"}
+%%         Reranker["reranker"]
+
+%%         FilterGraph --> RRFFusion
+%%         GraphQuery --> RRFFusion
+%%         DenseTopK --> RRFFusion
+%%         BM25TopK --> RRFFusion
+%%         RRFFusion --> Reranker
+%%     end
+
+%%     VectorDB -- "GraphRAG" --> FilterGraph
+%%     VectorDB -- "graph_rag_query" --> GraphQuery
+%%     VectorDB --> DenseTopK
+%%     VectorDB --> BM25TopK
+
+%%     %% --- ПРАВАЯ СРЕДНЯЯ ЧАСТЬ (LLM Агенты) ---
+
+%%     Agent1["<b>ЛЛМ-агент 1 (DeepSeek)</b><br>* Генерирует топ Х<br>гипотез<br>* MCP:<br>  - запрос в бд<br>  - запрос к VLM<br>  - интернет ретрив"]
+    
+%%     Agent2["<b>ЛЛМ-агент 2 (DeepSeek)</b><br>[ACTOR]<br>* Проверяет гипотезу<br>* Поиск источников (бд,<br>интернет избранные<br>источники Google<br>Scholar, Arxiv)<br>* Проверка источников<br>* Обоснование<br><br>Если не исправить<br>комментарии judge, то<br>отбросить гипотезу"]
+    
+%%     Agent3["<b>ЛЛМ-агент 3 (DeepSeek)</b><br>[JUDGE]<br>* Критикует гипотезу<br>* Поиск источников контраргументов<br>* Критика обоснования<br>* Отсутствующие блоки<br><br>Заканчивает цикл когда бинарные метрики<br>- полное корректное обоснование (1/0, вес 0.5)<br>- все ссылки на источники (1/0, блокирующая)<br>- ожидаемый механизм влияния, оценка новизны<br>  (по сравнению с известными решениями) (1/0 по<br>  каждому, вес суммарно 0.3)<br>- риски (технические, экономические) (1/0,<br>  блокирующая)<br>- ожидаемая ценность (влияние на целевой KPI)<br>  (1/0, 0.2)<br><br>Итоговый порог - все пункты в наличии"]
+
+%%     VectorDB <--> Agent1
+%%     Agent1 <--> Agent2
+%%     Agent2 <--> Agent3
+
+%%     %% --- НИЖНЯЯ ЛЕВАЯ ЧАСТЬ (LLM сервисы) ---
+
+%%     subgraph LLMServices [LLM-service]
+%%         style LLMServices fill:none,stroke:#333,stroke-width:1.5px,rx:15,ry:15
+%%         DeepSeekAPI["<i>DeepSeek V4 Flash</i><br><i>Yandex API</i>"]:::dashedBoxOrange
+%%         QwenVLM["<i>Qwen3.6 35b (VLM)</i><br><i>Yandex API</i>"]:::dashedBox
+%%     end
+
+%%     %% Связи для VLM (красные и зеленые стрелки на схеме)
+%%     ImageFolder -- "картинка" --> QwenVLM
+%%     Agent1 -- "запрос" --> QwenVLM
+%%     QwenVLM -- "текстовый ответ" --> Agent1
+
+%%     %% --- НИЖНЯЯ ПРАВАЯ ЧАСТЬ (Вывод) ---
+
+%%     FinalReport["Итоговый роадмап от<br>гипотезы до финального<br>репорта с сохранением на<br>сервере (со ссылкой)<br>- Сам репорт по шаблону, со<br>всеми ссылками и пунктами,<br>что проверял judge"]
+    
+%%     Agent3 --> FinalReport
+
+%%     %% --- САМЫЙ НИЗ (Frontend) ---
+
+%%     subgraph Frontend [<b>Frontend</b>]
+%%         style Frontend fill:none,stroke:#333,stroke-width:2px,rx:15,ry:15
+%%         direction LR
+%%         F_Query["Поля:<br>* Query<br>* Добавление<br>документа или URL"]
+%%         F_Chat["Чат сервис с ллм<br>для проверки и создания<br>промптов<br>(с добавлением изображений)"]
+%%         F_Visual["Визуальное<br>отображение прогресса,<br>генерируемого текста,<br>этапы"]
+%%         F_Preview["Превью документа<br>Визуальное отображение роадмапы<br>Ссылка на док на сервере"]
+%%     end
+
+%%     %% Связи фронтенда с бэкендом
+%%     F_Query --> WebRet
+%%     F_Chat --> DeepSeekAPI
+%%     FinalReport --> F_Preview
+
+flowchart TD
+    %% --- Настройки стилей ---
+    classDef default fill:#fff,stroke:#333,stroke-width:1.5px,color:#000,rx:10,ry:10;
+    classDef db fill:#fff,stroke:#333,stroke-width:1.5px,shape:cylinder;
+    classDef folder fill:#fff,stroke:#333,stroke-width:1.5px,shape:folder;
+    classDef dashedOrange fill:#fff,stroke:#f90,stroke-width:1.5px,stroke-dasharray: 5 5;
+    classDef dashedBlack fill:#fff,stroke:#333,stroke-width:1.5px,stroke-dasharray: 5 5;
+
+    %% --- Определение узлов ---
+    
+    DataMD["<b>Данные в Markdown</b><br><br>* документы из<br>PDF с opendataloader<br>Word с docx2md<br>Excel с openpyxl + pandas<br><br>* PNG/JPG сохраняются в md<br>с одной единственной<br>ссылкой на картинку"]
+    
+    WebRet["<b>Ретрив страницы из интернета</b><br>- undetectable chromedriver<br>загрузка страницы<br>- анализ DOM, выделение<br>значимых блоков<br>- сбор текста, преобразование<br>в Markdown"]
+    
+    Chunker["<b>Чанкер</b><br>* очистка regexp<br>&nbsp;&nbsp;- пробелы, отступы<br><div style='border: 1.5px dashed #4caf50; padding: 4px; margin: 4px 0; border-radius: 4px;'><i>* картинка -><br>-> текстовое<br>представление<br>* разметка чанка</i><br>&nbsp;&nbsp;- Summary<br>&nbsp;&nbsp;- Questions</div>* metadata<br>&nbsp;&nbsp;- Заголовок<br>&nbsp;&nbsp;- Подзаголовок<br>&nbsp;&nbsp;- имя файла<br>&nbsp;&nbsp;- название фабрики"]
+    
+    ImageFolder[/"Папка с картинками"/]:::folder
+    
+    RabbitMQ[("очередь (Rabbit MQ)")]:::db
+    VectorDB[("<b>Векторная БД</b><br>* Гибридный поиск<br>BM-25 + embed<br>* Единая структура<br>хранения чанка")]:::db
+    
+    Agent1["<b>ЛЛМ-агент 1 (DeepSeek)</b><br>* Генерирует топ Х<br>гипотез<br>* MCP:<br>&nbsp;&nbsp;- запрос в бд<br>&nbsp;&nbsp;<span style='border: 1.5px dashed red; padding: 2px; border-radius: 4px;'>- запрос к VLM</span><br>&nbsp;&nbsp;- интернет ретрив"]
+    
+    subgraph AgentsBox [ ]
+        direction LR
+        Agent2["<b>ЛЛМ-агент 2 (DeepSeek)</b><br>[ACTOR]<br>* Проверяет гипотезу<br>* Поиск источников (бд,<br>интернет избранные<br>источники Google<br>Scholar, Arxiv)<br>* Проверка источников<br>* Обоснование<br><br>Если не исправить<br>комментарии judge, то<br>отбросить гипотезу"]
+        
+        Agent3["<b>ЛЛМ-агент 3 (DeepSeek)</b><br>[JUDGE]<br>* Критикует гипотезу<br>* Поиск источников контраргументов<br>* Критика обоснования<br>* Отсутствующие блоки<br><br>Заканчивает цикл когда бинарные метрики<br>- полное корректное обоснование (1/0, вес 0.5)<br>- все ссылки на источники (1/0, блокирующая)<br>- ожидаемый механизм влияния, оценка новизны<br>&nbsp;&nbsp;(по сравнению с известными решениями) (1/0 по<br>&nbsp;&nbsp;каждому, вес суммарно 0.3)<br>- риски (технические, экономические) (1/0,<br>&nbsp;&nbsp;блокирующая)<br>- ожидаемая ценность (влияние на целевой KPI)<br>&nbsp;&nbsp;(1/0, 0.2)<br><br>Итоговый порог - все пункты в наличии"]
+    end
+    style AgentsBox fill:none,stroke:#333,stroke-width:1.5px,rx:15,ry:15
+
+    subgraph GraphRAG_Box [ ]
+        direction LR
+        FilterGraph["фильтруем<br>graph ноды"]
+        GraphQuery["<b>graph_query</b><br>traverse 2-3 hop<br>получаем path + node_ids[]"]
+        DenseTopK["Dense top-k"]
+        BM25TopK["BM25 top-k"]
+        RRFFusion("RRF Fusion")
+        Reranker("reranker")
+    end
+    style GraphRAG_Box fill:none,stroke:#333,stroke-width:1.5px,rx:15,ry:15
+
+    subgraph LLMServices [LLM-service]
+        direction LR
+        DeepSeekAPI["<i>DeepSeek V4 Flash</i><br><i>Yandex API</i>"]:::dashedOrange
+        QwenVLM["<i>Qwen3.6 35b (VLM)</i><br><i>Yandex API</i>"]:::dashedBlack
+    end
+    style LLMServices fill:none,stroke:#333,stroke-width:1.5px,rx:15,ry:15
+
+    FinalReport["- Итоговый роадмап от<br>гипотезы до финального<br>репорта с сохранением на<br>сервере (со ссылкой)<br>- Сам репорт по шаблону, со<br>всеми ссылками и пунктами,<br>что проверял judge"]
+
+    subgraph Frontend [<b>Frontend</b>]
+        direction LR
+        F_Query["Поля:<br>* Query<br>* Добавление<br>документа или URL"]
+        F_Chat["Чат сервис с ллм<br>для проверки и создания<br>промптов<br>(с добавлением изображений)"]
+        F_Visual["Визуальное<br>отображение прогресса,<br>генерируемого текста,<br>этапы"]
+        F_Preview["Превью документа<br>Визуальное отображение роадмапы<br>Ссылка на док на сервере"]
+    end
+    style Frontend fill:none,stroke:#333,stroke-width:2px,rx:15,ry:15
+
+    %% --- СВЯЗИ (Порядок важен для цветовой стилизации внизу) ---
+    
+    %% 0-2: Левая часть
+    WebRet --> DataMD
+    DataMD --> Chunker
+    Chunker --> ImageFolder
+    
+    %% 3-5: Очередь и БД
+    Chunker -- "размеченный<br>чанк" --> RabbitMQ
+    RabbitMQ -- "размеченный<br>чанк" --> VectorDB
+    VectorDB -- "status OK/ERROR" --> RabbitMQ
+    
+    %% 6-10: Внутри GraphRAG
+    FilterGraph --> RRFFusion
+    GraphQuery --> RRFFusion
+    GraphQuery --> FilterGraph
+    DenseTopK --> RRFFusion
+    BM25TopK --> RRFFusion
+    RRFFusion --> Reranker
+    
+    %% 11-14: Векторная БД -> GraphRAG
+    VectorDB -- "GraphRAG" --> FilterGraph
+    VectorDB -- "graph_rag_query" --> GraphQuery
+    VectorDB --> DenseTopK
+    VectorDB --> BM25TopK
+    
+    %% 15-20: Агенты и БД
+    VectorDB --> Agent1
+    Agent1 --> VectorDB
+    Agent1 --> Agent2
+    Agent2 --> Agent1
+    Agent2 --> Agent3
+    Agent3 --> Agent2
+    
+    %% 21-22: Вывод
+    Agent3 --> FinalReport
+    FinalReport --> F_Preview
+    
+    %% 23-24: Фронтенд -> Бэкенд
+    F_Query --> WebRet
+    F_Chat --> DeepSeekAPI
+    
+    %% 25-27: VLM цветные связи (Розовый, Красный, Зеленый)
+    ImageFolder -->|"<span style='color:#d1387b; font-weight:bold;'>картинка + запрос</span>"| QwenVLM
+    Agent1 -->|"<span style='color:#e60000; font-weight:bold;'>внутренний URL картинки</span>"| QwenVLM
+    QwenVLM -->|"<span style='color:#00b300; font-weight:bold;'>текстовый ответ</span>"| Agent1
+
+    %% Применение цветов к последним 3 связям (индексы 25, 26, 27)
+    linkStyle 25 stroke:#d1387b,stroke-width:2px;
+    linkStyle 26 stroke:#e60000,stroke-width:2px;
+    linkStyle 27 stroke:#00b300,stroke-width:2px;
+
 ## Проблематика
 
 На старте научно-исследовательских проектов в НИИ и промышленных лабораториях часто отсутствует системный механизм генерации и приоритизации гипотез. Это приводит к следующим проблемам:
