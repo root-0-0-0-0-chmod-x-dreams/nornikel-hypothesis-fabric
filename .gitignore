@@ -1,0 +1,4 @@
+local-data/
+external-data/
+*/.env
+__pycache__/
