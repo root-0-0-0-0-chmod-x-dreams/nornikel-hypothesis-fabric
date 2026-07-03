@@ -54,7 +54,7 @@ async def convert_file(file_path: Path, original_filename: str) -> ConvertResult
     file_type = detect_file_type(original_filename)
     logger.info(
         "converting_file",
-        extra={"filename": original_filename, "detected_type": file_type.value},
+        extra={"original_filename": original_filename, "detected_type": file_type.value},
     )
 
     converter = get_converter(file_type)
