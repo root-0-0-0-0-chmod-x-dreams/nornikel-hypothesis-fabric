@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useRef, useCallback, useEffect } from "react";
+import { type ReactNode, useState, useEffect, useRef } from "react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 
@@ -27,52 +27,50 @@ export function AppLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [detailWidth, setDetailWidth] = useState(480);
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved) return saved === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
 
   const draggingSidebar = useRef(false);
   const draggingDetail = useRef(false);
 
-  const onMouseMove = useCallback((e: MouseEvent) => {
-    if (draggingSidebar.current) {
-      setSidebarWidth(Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, e.clientX)));
-    }
-    if (draggingDetail.current) {
-      setDetailWidth(Math.min(MAX_DETAIL, Math.max(MIN_DETAIL, window.innerWidth - e.clientX)));
-    }
-  }, []);
-
-  const onMouseUp = useCallback(() => {
-    draggingSidebar.current = false;
-    draggingDetail.current = false;
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  }, []);
-
   useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (draggingSidebar.current) {
+        setSidebarWidth(Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, e.clientX)));
+      }
+      if (draggingDetail.current) {
+        setDetailWidth(Math.min(MAX_DETAIL, Math.max(MIN_DETAIL, window.innerWidth - e.clientX)));
+      }
+    };
+    const onMouseUp = () => {
+      draggingSidebar.current = false;
+      draggingDetail.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
     return () => {
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
     };
-  }, [onMouseMove, onMouseUp]);
-
-  const startResizeSidebar = () => {
-    draggingSidebar.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  };
-
-  const startResizeDetail = () => {
-    draggingDetail.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  };
+  }, []);
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden">
+    <div className={`h-dvh flex flex-col overflow-hidden ${dark ? "dark" : ""}`}>
       <Header
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         sidebarOpen={sidebarOpen}
+        dark={dark}
+        onToggleDark={() => setDark(!dark)}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
@@ -87,8 +85,12 @@ export function AppLayout({
 
         {sidebarOpen && (
           <div
-            className="w-1 cursor-col-resize bg-border hover:bg-accent/50 transition-colors flex-shrink-0 relative group"
-            onMouseDown={startResizeSidebar}
+            className="w-[3px] cursor-col-resize bg-border hover:bg-accent/40 transition-colors flex-shrink-0 relative group"
+            onMouseDown={() => {
+              draggingSidebar.current = true;
+              document.body.style.cursor = "col-resize";
+              document.body.style.userSelect = "none";
+            }}
           >
             <div className="absolute inset-y-0 -left-1 -right-1" />
           </div>
@@ -99,13 +101,17 @@ export function AppLayout({
         {detailContent && (
           <>
             <div
-              className="w-1 cursor-col-resize bg-border hover:bg-accent/50 transition-colors flex-shrink-0 relative group"
-              onMouseDown={startResizeDetail}
+              className="w-[3px] cursor-col-resize bg-border hover:bg-accent/40 transition-colors flex-shrink-0 relative group"
+              onMouseDown={() => {
+                draggingDetail.current = true;
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+              }}
             >
               <div className="absolute inset-y-0 -left-1 -right-1" />
             </div>
             <aside
-              className="flex-shrink-0 bg-white border-l border-border flex flex-col overflow-hidden"
+              className="flex-shrink-0 glass-strong border-l border-border flex flex-col overflow-hidden shadow-lg"
               style={{ width: detailWidth }}
             >
               {detailContent}

@@ -1,5 +1,7 @@
 import type { Document } from "@/types";
 import { DocumentCard } from "./DocumentCard";
+import { AttentionView } from "@/components/ui";
+import { FileSearch } from "lucide-react";
 
 interface DocumentListProps {
   documents: Document[];
@@ -17,7 +19,16 @@ export function DocumentList({
   emptyMessage = "Нет загруженных документов",
 }: DocumentListProps) {
   if (documents.length === 0) {
-    return <p className="text-sm text-text-muted text-center py-4">{emptyMessage}</p>;
+    return (
+      <AttentionView
+        icon={<FileSearch size={24} />}
+        title="Нет документов"
+        description={emptyMessage}
+        variant="gray"
+        size="sm"
+        className="py-6"
+      />
+    );
   }
 
   return (

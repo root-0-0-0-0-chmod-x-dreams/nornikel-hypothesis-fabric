@@ -4,12 +4,20 @@ interface ProgressProps {
   label?: string;
   showValue?: boolean;
   size?: "sm" | "md" | "lg";
+  color?: "accent" | "blue" | "green" | "amber";
   className?: string;
 }
 
-const heightStyles = { sm: "h-1", md: "h-2", lg: "h-3" };
+const heightStyles = { sm: "h-1.5", md: "h-2", lg: "h-3" };
 
-export function Progress({ value, max = 100, label, showValue = false, size = "md", className = "" }: ProgressProps) {
+const colorStyles = {
+  accent: "bg-accent",
+  blue: "bg-accent-blue",
+  green: "bg-accent-green",
+  amber: "bg-accent-amber",
+};
+
+export function Progress({ value, max = 100, label, showValue = false, size = "md", color = "accent", className = "" }: ProgressProps) {
   const pct = Math.min(100, Math.max(0, (value / max) * 100));
 
   return (
@@ -22,8 +30,7 @@ export function Progress({ value, max = 100, label, showValue = false, size = "m
       )}
       <div className={`w-full bg-gray-100 rounded-full overflow-hidden ${heightStyles[size]}`}>
         <div
-          className={`${heightStyles[size]} bg-accent rounded-full transition-all duration-500 ease-out
-            ${pct < 100 ? "bg-gradient-to-r from-accent via-accent to-violet-400 animate-shimmer" : ""}`}
+          className={`${heightStyles[size]} rounded-full transition-all duration-500 ease-out ${colorStyles[color]}`}
           style={{ width: `${pct}%` }}
         />
       </div>

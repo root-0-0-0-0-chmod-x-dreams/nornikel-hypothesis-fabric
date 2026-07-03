@@ -12,17 +12,17 @@ export function ChatMessage({ message }: ChatMessageProps) {
   return (
     <div className={`flex gap-3 animate-fade-in ${isUser ? "flex-row-reverse" : ""}`}>
       <div
-        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-          ${isUser ? "bg-accent text-white" : "bg-gray-100 text-text-muted"}`}
+        className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-sm
+          ${isUser ? "bg-accent/90 backdrop-blur-sm text-white" : "glass text-text-muted"}`}
       >
         {isUser ? <User size={16} /> : <Bot size={16} />}
       </div>
       <div className={`flex flex-col gap-2 max-w-[75%] ${isUser ? "items-end" : "items-start"}`}>
         <div
-          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed
+          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm
             ${isUser
-              ? "bg-accent text-white rounded-br-md"
-              : "bg-gray-100 text-text rounded-bl-md"
+              ? "bg-accent/90 backdrop-blur-sm text-white rounded-br-md"
+              : "glass text-text rounded-bl-md"
             }`}
         >
           {message.isStreaming && !message.content ? (

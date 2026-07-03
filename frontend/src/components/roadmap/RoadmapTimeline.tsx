@@ -8,9 +8,9 @@ interface RoadmapTimelineProps {
 
 const statusConfig: Record<RoadmapStep["status"], { icon: LucideIcon; color: string; lineColor: string }> = {
   pending: { icon: Clock, color: "text-text-muted border-border bg-white", lineColor: "bg-gray-200" },
-  in_progress: { icon: Play, color: "text-accent border-accent bg-accent-bg", lineColor: "bg-accent" },
-  completed: { icon: Check, color: "text-emerald-600 border-emerald-500 bg-emerald-50", lineColor: "bg-emerald-500" },
-  failed: { icon: X, color: "text-red-600 border-red-500 bg-red-50", lineColor: "bg-red-500" },
+  in_progress: { icon: Play, color: "text-accent border-accent/50 bg-accent-bg", lineColor: "bg-accent/40" },
+  completed: { icon: Check, color: "text-accent-green border-accent-green/50 bg-accent-green-bg", lineColor: "bg-accent-green/40" },
+  failed: { icon: X, color: "text-red-500 border-red-400/50 bg-red-50", lineColor: "bg-red-400/40" },
 };
 
 export function RoadmapTimeline({ steps, className = "" }: RoadmapTimelineProps) {
@@ -26,14 +26,14 @@ export function RoadmapTimeline({ steps, className = "" }: RoadmapTimelineProps)
         return (
           <div key={step.id} className="flex gap-4">
             <div className="flex flex-col items-center">
-              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${cfg.color}`}>
+              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center flex-shrink-0 shadow-sm ${cfg.color}`}>
                 <Icon size={14} />
               </div>
               {!isLast && (
-                <div className={`w-0.5 flex-1 min-h-6 mt-2 ${cfg.lineColor}`} />
+                <div className={`w-0.5 flex-1 min-h-6 mt-2 rounded-full ${cfg.lineColor}`} />
               )}
             </div>
-            <div className={`pb-6 ${isLast ? "" : ""}`}>
+            <div className="pb-6">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-text-muted">Шаг {step.order}</span>
                 <span className="text-xs text-text-muted/60">{step.duration}</span>
@@ -46,7 +46,7 @@ export function RoadmapTimeline({ steps, className = "" }: RoadmapTimelineProps)
                 </span>
               </div>
               {step.status === "failed" && step.failureCriteria && (
-                <div className="mt-2 px-3 py-2 bg-red-50 rounded-lg text-xs text-red-700">
+                <div className="mt-2 px-3 py-2 bg-red-50 rounded-xl text-xs text-red-600">
                   Причина: {step.failureCriteria}
                 </div>
               )}

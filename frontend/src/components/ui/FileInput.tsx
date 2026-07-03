@@ -42,8 +42,8 @@ export function FileInput({ onFiles, accept, multiple = true, label = "Пере�
       onDrop={handleDrop}
       onClick={() => inputRef.current?.click()}
       className={`flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed
-        rounded-xl cursor-pointer transition-all duration-150
-        ${dragOver ? "border-accent bg-accent-bg" : "border-border hover:border-accent-border/50 hover:bg-gray-50"}
+        rounded-2xl cursor-pointer transition-all duration-200
+        ${dragOver ? "border-accent bg-accent-bg/50 scale-[1.01]" : "border-border hover:border-accent-border/50 hover:bg-gray-50/50"}
         ${className}`}
     >
       <input
@@ -54,7 +54,7 @@ export function FileInput({ onFiles, accept, multiple = true, label = "Пере�
         onChange={handleChange}
         className="hidden"
       />
-      <div className={`p-3 rounded-full ${dragOver ? "bg-accent-bg" : "bg-gray-100"}`}>
+      <div className={`p-3 rounded-2xl transition-all duration-200 ${dragOver ? "bg-accent-bg scale-110" : "bg-gray-100"}`}>
         {dragOver ? <File size={24} className="text-accent" /> : <Upload size={24} className="text-text-muted" />}
       </div>
       <p className="text-sm text-text-muted text-center">{label}</p>

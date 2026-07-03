@@ -1,5 +1,5 @@
 import { X, FileText, Globe, ExternalLink, Clock, HardDrive, Info, Eye } from "lucide-react";
-import { Badge, Tabs } from "@/components/ui";
+import { Badge, Tabs, AttentionView } from "@/components/ui";
 import type { Document } from "@/types";
 
 interface DocumentPreviewProps {
@@ -53,12 +53,12 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-5 py-3 border-b border-border flex-shrink-0">
+      <div className="px-5 py-3 border-b border-border flex-shrink-0 glass-strong">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className={`p-2 rounded-lg ${isUrl ? "bg-blue-50" : "bg-gray-100"} flex-shrink-0`}>
+            <div className={`p-2 rounded-xl ${isUrl ? "bg-accent-blue-bg" : "bg-gray-100"} flex-shrink-0`}>
               {isUrl ? (
-                <Globe size={18} className="text-blue-600" />
+                <Globe size={18} className="text-accent-blue" />
               ) : (
                 <FileText size={18} className="text-text-muted" />
               )}
@@ -72,7 +72,7 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 text-text-muted transition-colors cursor-pointer flex-shrink-0"
+            className="p-2 rounded-xl hover:bg-black/5 text-text-muted transition-colors cursor-pointer flex-shrink-0"
           >
             <X size={18} />
           </button>
@@ -90,7 +90,7 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
         <iframe
           src={doc.blobUrl}
           title={doc.name}
-          className="flex-1 w-full border-0"
+          className="flex-1 w-full border-0 bg-white"
         />
       ) : (
         <div className="flex-1 overflow-y-auto p-5">
@@ -104,7 +104,7 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
 
             <div className="grid grid-cols-2 gap-3">
               {doc.size != null && (
-                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2 p-3 rounded-xl glass">
                   <HardDrive size={14} className="text-text-muted" />
                   <div>
                     <p className="text-[10px] text-text-muted uppercase tracking-wider">Размер</p>
@@ -112,7 +112,7 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2 p-3 rounded-xl glass">
                 <Clock size={14} className="text-text-muted" />
                 <div>
                   <p className="text-[10px] text-text-muted uppercase tracking-wider">Загружен</p>
@@ -122,8 +122,8 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
             </div>
 
             {isUrl ? (
-              <div className="flex flex-col gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
-                <p className="text-xs font-medium text-blue-800">
+              <div className="flex flex-col gap-3 p-4 rounded-2xl bg-accent-blue-bg/50 border border-accent-blue-border/20">
+                <p className="text-xs font-medium text-accent-blue">
                   Ссылка на внешний источник. Содержимое скачивается и обрабатывается для индексации.
                 </p>
                 {hasRealUrl && (
@@ -131,27 +131,37 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
                     href={doc.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline break-all"
+                    className="flex items-center gap-1.5 text-xs text-accent-blue hover:underline break-all"
                   >
                     <ExternalLink size={12} />
                     {doc.url}
                   </a>
                 )}
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
-                <div className="p-4 rounded-2xl bg-gray-100">
-                  <FileText size={32} className="text-text-muted/40" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-text">Файл сохранён в системе</p>
-                  <p className="text-xs text-text-muted mt-1 max-w-xs">
-                    Документ загружен и готов к использованию в генерации гипотез.
-                    {canPreviewFile && " Нажмите «Файл» для просмотра содержимого."}
-                  </p>
-                </div>
-              </div>
-            )}
+            ) : doc.status === "ready" ? (
+              <AttentionView
+                icon={<FileText size={32} />}
+                title="Файл сохранён в системе"
+                description={
+                  canPreviewFile
+                    ? "Документ готов к использованию. Нажмите «Файл» для просмотра содержимого."
+                    : "Документ загружен и готов к использованию в генерации гипотез."
+                }
+                variant="green"
+                size="md"
+                blur
+                className="py-4"
+              />
+            ) : doc.status === "processing" ? (
+              <AttentionView
+                icon={<Clock size={32} />}
+                title="Идёт обработка"
+                description="Документ обрабатывается. Извлечение текста, структурирование и индексация."
+                variant="amber"
+                size="md"
+                className="py-4"
+              />
+            ) : null}
 
             <div className="border-t border-border pt-4">
               <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
@@ -173,7 +183,7 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
                 {hasRealUrl && (
                   <>
                     <dt className="text-[11px] text-text-muted">Ссылка</dt>
-                    <dd className="text-[11px] text-accent truncate">
+                    <dd className="text-[11px] text-accent-blue truncate">
                       <a href={doc.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
                         {doc.url}
                       </a>

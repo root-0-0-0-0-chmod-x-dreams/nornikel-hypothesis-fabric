@@ -9,3 +9,5 @@ export { Spinner, TypingDots } from "./Spinner";
 export { Tabs } from "./Tabs";
 export { Tooltip } from "./Tooltip";
 export { FileInput } from "./FileInput";
+export { AttentionView } from "./AttentionView";
+export type { AttentionVariant, AttentionSize } from "./AttentionView";

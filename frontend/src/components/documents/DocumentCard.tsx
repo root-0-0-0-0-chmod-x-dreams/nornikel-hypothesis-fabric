@@ -18,7 +18,7 @@ const iconMap = {
   other: FileText,
 };
 
-const statusMap: Record<Document["status"], { label: string; variant: "default" | "success" | "warning" | "danger" | "accent" }> = {
+const statusMap: Record<Document["status"], { label: string; variant: "default" | "success" | "warning" | "danger" | "accent" | "info" }> = {
   uploading: { label: "Загружается", variant: "warning" },
   processing: { label: "Обработка", variant: "warning" },
   ready: { label: "Готов", variant: "success" },
@@ -45,31 +45,31 @@ export function DocumentCard({ document: doc, onRemove, onClick, onPreview }: Do
   return (
     <Card padding="sm" hover={!!onClick} onClick={onClick ? () => onClick(doc) : undefined}>
       <div className="flex items-start gap-3">
-        <div className={`p-2 rounded-lg ${isProcessing ? "bg-amber-50" : isUrl ? "bg-blue-50" : "bg-gray-100"} flex-shrink-0`}>
+        <div className={`p-2 rounded-xl ${isProcessing ? "bg-accent-amber-bg" : isUrl ? "bg-accent-blue-bg" : "bg-gray-100"} flex-shrink-0`}>
           {isProcessing ? (
-            <Loader size={16} className="text-amber-600 animate-spin" />
+            <Loader size={16} className="text-accent-amber animate-spin" />
           ) : (
-            <Icon size={16} className={isUrl ? "text-blue-600" : "text-text-muted"} />
+            <Icon size={16} className={isUrl ? "text-accent-blue" : "text-text-muted"} />
           )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-medium text-text truncate">{doc.name}</p>
-            {isUrl && <Globe size={11} className="text-blue-400 flex-shrink-0" />}
+            {isUrl && <Globe size={11} className="text-accent-blue flex-shrink-0" />}
           </div>
           <div className="flex items-center gap-2 mt-1">
             <Badge variant={statusMap[doc.status].variant}>
               {statusMap[doc.status].label}
             </Badge>
             {doc.size && <span className="text-[11px] text-text-muted">{formatSize(doc.size)}</span>}
-            {isUrl && <span className="text-[11px] text-blue-500">ссылка</span>}
+            {isUrl && <span className="text-[11px] text-accent-blue">ссылка</span>}
           </div>
         </div>
         <div className="flex items-center gap-1">
           {canPreview && onPreview && doc.status === "ready" && (
             <button
               onClick={(e) => { e.stopPropagation(); onPreview(doc); }}
-              className="p-1.5 rounded-lg hover:bg-accent-bg text-text-muted hover:text-accent transition-colors cursor-pointer"
+              className="p-1.5 rounded-xl hover:bg-accent-bg text-text-muted hover:text-accent transition-colors cursor-pointer"
               title="Посмотреть файл"
             >
               <Eye size={14} />
@@ -81,7 +81,7 @@ export function DocumentCard({ document: doc, onRemove, onClick, onPreview }: Do
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-text-muted hover:text-accent transition-colors"
+              className="p-1.5 rounded-xl hover:bg-accent-blue-bg text-text-muted hover:text-accent-blue transition-colors"
               title="Открыть источник"
             >
               <ExternalLink size={14} />
@@ -90,7 +90,7 @@ export function DocumentCard({ document: doc, onRemove, onClick, onPreview }: Do
           {onRemove && (
             <button
               onClick={(e) => { e.stopPropagation(); onRemove(doc.id); }}
-              className="p-1.5 rounded-lg hover:bg-red-50 text-text-muted hover:text-red-500 transition-colors cursor-pointer"
+              className="p-1.5 rounded-xl hover:bg-red-50 text-text-muted hover:text-red-500 transition-colors cursor-pointer"
             >
               <X size={14} />
             </button>

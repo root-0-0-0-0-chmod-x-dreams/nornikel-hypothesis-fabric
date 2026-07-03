@@ -20,7 +20,7 @@ const navItems: { id: "chat" | "documents" | "roadmap"; label: string; icon: typ
 export function Sidebar({ open, width, children, activeTab, onTabChange, onAddDocument }: SidebarProps) {
   return (
     <aside
-      className="flex-shrink-0 bg-white border-r border-border flex flex-col overflow-hidden transition-[width] duration-200"
+      className="flex-shrink-0 glass-strong border-r border-border flex flex-col overflow-hidden transition-[width] duration-200 z-10"
       style={{ width: open ? width : 0, borderRightWidth: open ? 1 : 0 }}
     >
       <div className="flex flex-col h-full" style={{ width }}>
@@ -31,10 +31,10 @@ export function Sidebar({ open, width, children, activeTab, onTabChange, onAddDo
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-150 cursor-pointer whitespace-nowrap
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap
                   ${activeTab === item.id
-                    ? "bg-accent-bg text-accent"
-                    : "text-text-muted hover:text-text hover:bg-gray-50"
+                    ? "bg-accent-bg text-accent shadow-sm"
+                    : "text-text-muted hover:text-text hover:bg-black/5"
                   }`}
               >
                 <Icon size={16} />
