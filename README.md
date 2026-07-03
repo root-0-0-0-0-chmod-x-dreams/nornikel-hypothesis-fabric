@@ -1,6 +1,7 @@
 # Фабрика гипотез
 
 ## Архитектура
+```
 %% flowchart TD
 %%     %% Настройки стилей
 %%     classDef default fill:#fff,stroke:#333,stroke-width:1.5px,color:#000,rx:10,ry:10;
@@ -215,6 +216,7 @@ flowchart TD
     linkStyle 25 stroke:#d1387b,stroke-width:2px;
     linkStyle 26 stroke:#e60000,stroke-width:2px;
     linkStyle 27 stroke:#00b300,stroke-width:2px;
+```
 
 ## Проблематика
 
