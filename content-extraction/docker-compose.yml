@@ -1,0 +1,17 @@
+services:
+  content-extraction:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: content-extraction
+
+    restart: unless-stopped
+
+    ports:
+      - "8005:8005"
+
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+    shm_size: "1gb"
