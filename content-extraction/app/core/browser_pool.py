@@ -137,6 +137,24 @@ class BrowserPool:
             except Exception:
                 pass
 
+            try:
+                html = await page.content()
+                if self._has_security_interstitial(html):
+                    await page.wait_for_function(
+                        """
+                        () => {
+                            const text = document.body ? document.body.innerText : '';
+                            return !text.includes('Performing security verification')
+                                && !text.includes('Verification successful. Waiting for')
+                                && !text.includes('Enable JavaScript and cookies to continue')
+                                && !text.includes('Just a moment...');
+                        }
+                        """,
+                        timeout=min(timeout_ms, 15000),
+                    )
+            except Exception:
+                pass
+
             html = await page.content()
             title = await page.title()
             cookies = await page.context.cookies(page.url)
@@ -161,6 +179,14 @@ class BrowserPool:
                 await self._pages.put(replacement)
             else:
                 await self._pages.put(page)
+
+    def _has_security_interstitial(self, html: str) -> bool:
+        return (
+            "Performing security verification" in html
+            or "Verification successful. Waiting for" in html
+            or "Enable JavaScript and cookies to continue" in html
+            or "Just a moment..." in html
+        )
 
     async def _shutdown(self) -> None:
         self._closing = True
