@@ -10,6 +10,23 @@ export interface Hypothesis {
   mechanism: string;
 }
 
+export interface ExtractedContent {
+  title: string | null;
+  markdown: string;
+  text: string;
+  excerpt: string | null;
+  html: string;
+  metadata: {
+    title: string | null;
+    description: string | null;
+    author: string | null;
+    siteName: string | null;
+    language: string | null;
+    canonicalUrl: string | null;
+  };
+  statusCode: number | null;
+}
+
 export interface Document {
   id: string;
   name: string;
@@ -17,8 +34,10 @@ export interface Document {
   size?: number;
   url: string;
   blobUrl?: string;
+  extractedContent?: ExtractedContent;
   uploadedAt: Date;
   status: "uploading" | "processing" | "ready" | "error";
+  errorMessage?: string;
 }
 
 export interface ChatMessage {

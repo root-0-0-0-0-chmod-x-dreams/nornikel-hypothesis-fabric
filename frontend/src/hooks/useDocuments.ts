@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { Document } from "@/types";
+import type { Document, ExtractedContent } from "@/types";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10);
@@ -35,14 +35,46 @@ const DEMO_DOCS: Document[] = [
   },
 ];
 
+async function extractUrl(url: string): Promise<ExtractedContent> {
+  const res = await fetch("/api/v1/extract", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(err.detail || `Ошибка экстракции: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return {
+    title: data.title ?? null,
+    markdown: data.markdown,
+    text: data.text,
+    excerpt: data.excerpt ?? null,
+    html: data.html,
+    metadata: {
+      title: data.metadata?.title ?? null,
+      description: data.metadata?.description ?? null,
+      author: data.metadata?.author ?? null,
+      siteName: data.metadata?.site_name ?? null,
+      language: data.metadata?.language ?? null,
+      canonicalUrl: data.metadata?.canonical_url ?? null,
+    },
+    statusCode: data.status_code ?? null,
+  };
+}
+
 export function useDocuments() {
   const [documents, setDocuments] = useState<Document[]>(DEMO_DOCS);
   const [uploading, setUploading] = useState(false);
 
-  const addByUrl = useCallback((url: string) => {
+  const addByUrl = useCallback(async (url: string) => {
     setUploading(true);
+    const docId = generateId();
     const doc: Document = {
-      id: generateId(),
+      id: docId,
       name: decodeURIComponent(new URL(url).pathname.split("/").pop() || url),
       type: "url",
       url,
@@ -50,12 +82,31 @@ export function useDocuments() {
       status: "processing",
     };
     setDocuments((prev) => [doc, ...prev]);
-    setTimeout(() => {
+
+    try {
+      const content = await extractUrl(url);
       setDocuments((prev) =>
-        prev.map((d) => (d.id === doc.id ? { ...d, status: "ready" as const } : d)),
+        prev.map((d) =>
+          d.id === docId
+            ? { ...d, status: "ready" as const, extractedContent: content, name: content.title || d.name }
+            : d,
+        ),
       );
+    } catch (err) {
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === docId
+            ? {
+                ...d,
+                status: "error" as const,
+                errorMessage: (err as Error).message || "Не удалось извлечь содержимое",
+              }
+            : d,
+        ),
+      );
+    } finally {
       setUploading(false);
-    }, 2000);
+    }
   }, []);
 
   const addByFiles = useCallback((files: File[]) => {

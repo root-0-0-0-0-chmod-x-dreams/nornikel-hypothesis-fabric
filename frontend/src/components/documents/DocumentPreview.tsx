@@ -1,11 +1,14 @@
-import { X, FileText, Globe, ExternalLink, Clock, HardDrive, Info, Eye } from "lucide-react";
-import { Badge, Tabs, AttentionView } from "@/components/ui";
+import { useState, useEffect, useRef } from "react";
+import { X, FileText, Globe, ExternalLink, Clock, HardDrive, Info, Eye, FileCode } from "lucide-react";
+import { Badge, Tabs, AttentionView, Progress } from "@/components/ui";
 import type { Document } from "@/types";
+
+type PreviewMode = "info" | "file" | "content";
 
 interface DocumentPreviewProps {
   document: Document;
-  mode: "info" | "file";
-  onModeChange: (mode: "info" | "file") => void;
+  mode: PreviewMode;
+  onModeChange: (mode: PreviewMode) => void;
   onClose: () => void;
 }
 
@@ -41,13 +44,46 @@ function isRealUrl(url: string): boolean {
 
 const previewableBlobTypes = ["pdf", "image"];
 
+function ProcessingState() {
+  const [progress, setProgress] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    timerRef.current = setInterval(() => {
+      setProgress(Math.min(92, Math.round(((Date.now() - startedAt) / 15000) * 92)));
+    }, 200);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center gap-5 py-6">
+      <AttentionView
+        icon={<Clock size={32} />}
+        title="Идёт обработка"
+        description="Извлечение текста, структурирование и индексация."
+        variant="amber"
+        size="md"
+      />
+      <div className="w-3/4 max-w-[200px]">
+        <Progress value={progress} size="sm" color="amber" showValue />
+      </div>
+    </div>
+  );
+}
+
 export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: DocumentPreviewProps) {
   const isUrl = doc.type === "url";
   const hasRealUrl = isRealUrl(doc.url);
   const canPreviewFile = doc.blobUrl && previewableBlobTypes.includes(doc.type);
+  const hasExtractedContent = !!doc.extractedContent;
+  const content = doc.extractedContent;
 
   const viewTabs = [
     { id: "info", label: "Инфо", icon: <Info size={14} /> },
+    ...(hasExtractedContent ? [{ id: "content" as const, label: "Контент", icon: <FileCode size={14} /> }] : []),
     ...(canPreviewFile ? [{ id: "file" as const, label: "Файл", icon: <Eye size={14} /> }] : []),
   ];
 
@@ -81,7 +117,7 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
           <Tabs
             tabs={viewTabs}
             activeTab={mode}
-            onChange={(id) => onModeChange(id as "info" | "file")}
+            onChange={(id) => onModeChange(id as PreviewMode)}
           />
         )}
       </div>
@@ -92,6 +128,25 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
           title={doc.name}
           className="flex-1 w-full border-0 bg-white"
         />
+      ) : mode === "content" && content ? (
+        <div className="flex-1 overflow-y-auto">
+          {content.metadata.title && (
+            <div className="px-5 pt-5 pb-3">
+              <h2 className="text-base font-bold text-text">{content.metadata.title}</h2>
+              {content.metadata.author && (
+                <p className="text-xs text-text-muted mt-1">{content.metadata.author}</p>
+              )}
+              {content.metadata.siteName && (
+                <p className="text-xs text-accent-blue mt-0.5">{content.metadata.siteName}</p>
+              )}
+            </div>
+          )}
+          <div className="px-5 pb-5">
+            <div className="prose prose-sm max-w-none text-text leading-relaxed whitespace-pre-wrap">
+              {content.text}
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-5">
           <div className="flex flex-col gap-5">
@@ -101,6 +156,12 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
               </Badge>
               {doc.type !== "url" && <Badge variant="accent">{doc.type.toUpperCase()}</Badge>}
             </div>
+
+            {doc.status === "error" && doc.errorMessage && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600">
+                {doc.errorMessage}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               {doc.size != null && (
@@ -124,7 +185,9 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
             {isUrl ? (
               <div className="flex flex-col gap-3 p-4 rounded-2xl bg-accent-blue-bg/50 border border-accent-blue-border/20">
                 <p className="text-xs font-medium text-accent-blue">
-                  Ссылка на внешний источник. Содержимое скачивается и обрабатывается для индексации.
+                  {hasExtractedContent
+                    ? "Содержимое извлечено. Перейдите на вкладку «Контент» для просмотра."
+                    : "Ссылка на внешний источник. Содержимое скачивается и обрабатывается."}
                 </p>
                 {hasRealUrl && (
                   <a
@@ -153,10 +216,12 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
                 className="py-4"
               />
             ) : doc.status === "processing" ? (
+              <ProcessingState />
+            ) : doc.status === "error" ? (
               <AttentionView
-                icon={<Clock size={32} />}
-                title="Идёт обработка"
-                description="Документ обрабатывается. Извлечение текста, структурирование и индексация."
+                icon={<X size={32} />}
+                title="Ошибка загрузки"
+                description={doc.errorMessage || "Не удалось загрузить документ. Попробуйте ещё раз."}
                 variant="amber"
                 size="md"
                 className="py-4"
@@ -188,6 +253,18 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
                         {doc.url}
                       </a>
                     </dd>
+                  </>
+                )}
+                {content?.metadata.language && (
+                  <>
+                    <dt className="text-[11px] text-text-muted">Язык</dt>
+                    <dd className="text-[11px] text-text">{content.metadata.language.toUpperCase()}</dd>
+                  </>
+                )}
+                {content?.statusCode != null && (
+                  <>
+                    <dt className="text-[11px] text-text-muted">HTTP статус</dt>
+                    <dd className="text-[11px] text-text">{content.statusCode}</dd>
                   </>
                 )}
               </dl>

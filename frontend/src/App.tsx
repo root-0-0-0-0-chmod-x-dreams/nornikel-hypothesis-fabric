@@ -74,7 +74,7 @@ export default function App() {
   const { documents, uploading, addByUrl, addByFiles, removeDocument } = useDocuments();
   const [activeTab, setActiveTab] = useState<"chat" | "documents" | "roadmap">("chat");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [previewState, setPreviewState] = useState<{ doc: Document; mode: "info" | "file" } | null>(null);
+  const [previewState, setPreviewState] = useState<{ doc: Document; mode: "info" | "file" | "content" } | null>(null);
 
   const sidebarContent = (() => {
     switch (activeTab) {
