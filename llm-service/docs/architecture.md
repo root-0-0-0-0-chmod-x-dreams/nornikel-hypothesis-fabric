@@ -2,7 +2,7 @@
 
 ## Обзор
 
-`llm-service` — это FastAPI-шлюз к моделям Yandex AI Studio (Alice AI LLM, YandexGPT, YandexGPT Lite), использующий OpenAI-совместимый протокол. Сервис предназначен для работы в составе более крупной системы (Фабрика гипотез), обслуживая множество контейнеров-потребителей.
+`llm-service` — это FastAPI-шлюз к LLM-провайдерам (Yandex AI Studio как primary + DeepSeek как fallback), использующий OpenAI-совместимый протокол. Сервис предназначен для работы в составе более крупной системы (Фабрика гипотез), обслуживая множество контейнеров-потребителей.
 
 ## Схема компонентов
 
@@ -35,8 +35,8 @@
 │  └──────────────────────────────────────────────────┘   │
 │                          │                               │
 │                          ▼                               │
-│              Yandex AI Studio API                        │
-│         (ai.api.cloud.yandex.net/v1)                     │
+│        Yandex AI Studio API + DeepSeek API               │
+│  (ai.api.cloud.yandex.net/v1, api.deepseek.com)          │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -51,12 +51,13 @@
 - `POST /api/v1/chat/stream` — streaming chat completion (SSE)
 
 ### 2. YandexClient (`yandex_client.py`)
-Обёртка над `openai.OpenAI`, сконфигурированная на эндпоинт Yandex AI Studio.
+Обёртка над `openai.OpenAI`, поддерживающая два провайдера: Yandex и DeepSeek.
 
 Особенности:
-- Формат model_id: `gpt://{FOLDER_ID}/{model_name}`
-- Использует `client.responses.create()` (Yandex-совместимый метод)
-- Все вызовы обёрнуты в `asyncio.to_thread` для неблокирующего I/O
+- Формат model_id для Yandex: `gpt://{FOLDER_ID}/{model_name}`
+- Формат model_id для DeepSeek: обычный `deepseek-*`
+- Использует `client.responses.create()`
+- Автоматический fallback Yandex -> DeepSeek на сетевых/таймаут/rate-limit/5xx ошибках
 - Категоризация ошибок: `RateLimitError` (429), `APIConnectionError` (502), `APITimeoutError` (504), `APIStatusError`, прочие
 
 ### 3. RequestQueue (`queue.py`)
@@ -102,8 +103,9 @@
 3. YandexClient.chat()
    ├── resolve_model() — проверка доступности, fallback
    ├── queue.acquire() — захват слота (semaphore)
-   ├── client.responses.create() — вызов Yandex API
+   ├── client.responses.create() — вызов primary провайдера
    │   ├── Успех → mark_available(), возврат результата
+   │   ├── Ошибка провайдера Yandex → fallback на DeepSeek (если настроен)
    │   ├── 429  → mark_rate_limited(), raise RateLimitError
    │   ├── 5xx  → mark_unavailable(), raise YandexLLMError
    │   └── ...  → логирование и raise

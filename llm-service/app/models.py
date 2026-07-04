@@ -82,3 +82,4 @@ class HealthResponse(BaseModel):
     uptime_seconds: float
     models_count: int
     yandex_configured: bool
+    deepseek_configured: bool

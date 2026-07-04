@@ -10,11 +10,13 @@ from .config import get_config
 from .logger import get_logger
 from .model_manager import get_model_manager
 from .models import (
+    ChatChoice,
     ChatRequest,
     ChatResponse,
     HealthResponse,
     ModelInfo,
     QueueStatus,
+    TokenUsage,
 )
 from .queue import get_queue
 from .yandex_client import get_client, YandexLLMError
@@ -34,6 +36,7 @@ async def health():
         uptime_seconds=round(time.monotonic() - _start_time, 1),
         models_count=len(mm._models),
         yandex_configured=cfg.is_configured,
+        deepseek_configured=cfg.is_deepseek_configured,
     )
 
 
@@ -84,20 +87,20 @@ async def chat(request: ChatRequest):
             request_id=result["request_id"],
             model=result["model"],
             choices=[
-                {
-                    "index": 0,
-                    "message": {
+                ChatChoice(
+                    index=0,
+                    message={
                         "role": "assistant",
                         "content": result["text"],
                     },
-                    "finish_reason": "stop",
-                }
+                    finish_reason="stop",
+                )
             ],
-            usage={
-                "prompt_tokens": result["usage"]["prompt_tokens"],
-                "completion_tokens": result["usage"]["completion_tokens"],
-                "total_tokens": result["usage"]["total_tokens"],
-            },
+            usage=TokenUsage(
+                prompt_tokens=result["usage"]["prompt_tokens"],
+                completion_tokens=result["usage"]["completion_tokens"],
+                total_tokens=result["usage"]["total_tokens"],
+            ),
             created_at=result["created_at"],
         )
     except YandexLLMError as e:

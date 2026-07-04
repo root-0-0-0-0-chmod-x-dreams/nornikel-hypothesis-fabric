@@ -32,11 +32,18 @@ def _register_default_models() -> None:
             max_tokens=params["max_tokens"],
             supports_streaming=True,
         )
+    if config.is_deepseek_configured:
+        mm.register_model(
+            model_id=config.deepseek_model,
+            display_name="DeepSeek V4 Flash",
+            max_tokens=2000,
+            supports_streaming=True,
+        )
 
 
 async def _initial_health_check() -> None:
-    if not config.is_configured:
-        logger.warning("yandex_not_configured")
+    if not config.has_any_provider:
+        logger.warning("no_llm_provider_configured")
         return
 
     mm = get_model_manager()
