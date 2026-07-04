@@ -1,0 +1,23 @@
+services:
+  manual-analysis:
+    build: .
+    container_name: manual-analysis
+    ports:
+      - "${PORT:-8002}:8002"
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8002
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
