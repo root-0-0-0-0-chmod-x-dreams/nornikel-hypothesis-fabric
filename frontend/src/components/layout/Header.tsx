@@ -29,7 +29,7 @@ export function Header({ onToggleSidebar, sidebarOpen, dark, onToggleDark }: Hea
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Tooltip content={dark ? "Светлая тема" : "Тёмная тема"}>
+        <Tooltip content={dark ? "Светлая тема" : "Тёмная тема"} position="bottom">
           <button
             onClick={onToggleDark}
             className="p-2 rounded-xl hover:bg-black/5 text-text-muted hover:text-accent transition-colors cursor-pointer"
@@ -37,7 +37,7 @@ export function Header({ onToggleSidebar, sidebarOpen, dark, onToggleDark }: Hea
             {dark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
         </Tooltip>
-        <Tooltip content="Экспертная настройка">
+        <Tooltip content="Экспертная настройка" position="bottom">
           <Button variant="ghost" size="sm">
             Настройки
           </Button>

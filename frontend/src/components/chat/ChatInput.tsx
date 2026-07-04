@@ -44,7 +44,7 @@ export function ChatInput({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2 p-4 border-t border-border glass-strong">
+    <form onSubmit={handleSubmit} className="flex items-center gap-2 p-4 border-t border-border glass-strong">
       <Tooltip content="Прикрепить файл или ссылку">
         <button
           type="button"
