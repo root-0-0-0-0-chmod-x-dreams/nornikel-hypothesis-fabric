@@ -17,7 +17,7 @@ class JSONFormatter(logging.Formatter):
         }
         if record.exc_info and record.exc_info[1]:
             log_entry["exception"] = self.formatException(record.exc_info)
-        for key in ("filename", "file_type", "images_extracted"):
+        for key in ("original_filename", "file_type", "images_extracted"):
             if hasattr(record, key):
                 log_entry[key] = getattr(record, key)
         return json.dumps(log_entry, ensure_ascii=False)
