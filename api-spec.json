@@ -1,0 +1,226 @@
+{
+  "version": "1.0.0",
+  "baseUrl": "http://localhost:8000/api/v1",
+  "description": "Фабрика гипотез — API для генерации, оценки и проверки научно-исследовательских гипотез",
+
+  "endpoints": {
+
+    "POST /chat": {
+      "description": "Отправить сообщение в LLM. Используется для тестирования промптов и ручной работы с моделью. Принимает текст и опционально изображения для VLM (Qwen3.6-35B).",
+      "auth": false,
+      "request": {
+        "model": "string (yandexgpt | yandexgpt-lite | alice-llm)",
+        "messages": [
+          {
+            "role": "user | assistant | system",
+            "content": "string | ImageContent[]"
+          }
+        ],
+        "temperature": "number (optional, default 0.7)",
+        "max_tokens": "number (optional, default 4096)"
+      },
+      "imageContent": {
+        "type": "image_url",
+        "image_url": { "url": "string (data:image/...;base64,...)" }
+      },
+      "response": {
+        "id": "string",
+        "choices": [{ "message": { "role": "assistant", "content": "string" } }],
+        "usage": { "prompt_tokens": "number", "completion_tokens": "number" }
+      }
+    },
+
+    "POST /chat/stream": {
+      "description": "То же что /chat, но ответ идёт потоком через Server-Sent Events (SSE).",
+      "auth": false,
+      "request": "см. POST /chat",
+      "response": "text/event-stream: data: {\"choices\":[{\"delta\":{\"content\":\"...\"}}]} ... data: [DONE]"
+    },
+
+    "POST /hypotheses/generate": {
+      "description": "Сгенерировать список проверяемых гипотез на основе запроса и контекстных документов. Ядро системы.",
+      "auth": false,
+      "request": {
+        "query": "string (обязательно) — целевое свойство или технологическая проблема, например: «повысить жаропрочность сплава Х на 15% при 800°C»",
+        "constraints": {
+          "raw_materials": ["string"]        ,
+          "budget": "string (опционально)",
+          "equipment": ["string"]            ,
+          "regulations": ["string"]          
+        },
+        "documentIds": ["string (ID документов из GET /documents)"],
+        "max_hypotheses": "number (optional, default 5)",
+        "language": "ru | en | zh (optional, default ru)"
+      },
+      "response": {
+        "query": "string — исходный запрос",
+        "hypotheses": [
+          {
+            "id": "string",
+            "title": "string — формулировка гипотезы, например: «Добавка 0.3% Nb в сплав X при отжиге 950°C повысит жаропрочность»",
+            "description": "string — развёрнутое описание (2–4 предложения)",
+            "rationale": "string — научное обоснование: механизм влияния, ожидаемые эффекты",
+            "sources": [
+              {
+                "text": "string — краткая ссылка, например: «Патент RU 2XXX XXX»",
+                "documentId": "string | null — ID документа из базы, если есть",
+                "url": "string | null — внешняя ссылка"
+              }
+            ],
+            "novelty": "high | medium | low",
+            "noveltyRationale": "string — почему такая оценка новизны",
+            "risks": {
+              "technical": "string — технические риски",
+              "economic": "string — экономические риски"
+            },
+            "expectedValue": "string — влияние на целевой KPI, например: «+15% жаропрочность, -2% себестоимость»",
+            "confidence": "number (0–1) — уверенность модели в гипотезе"
+          }
+        ],
+        "generatedAt": "string (ISO 8601)"
+      }
+    },
+
+    "POST /hypotheses/generate/stream": {
+      "description": "Потоковая генерация гипотез. Гипотезы приходят по одной через SSE по мере готовности.",
+      "auth": false,
+      "request": "см. POST /hypotheses/generate",
+      "response": "text/event-stream:\n  data: {\"type\":\"progress\",\"stage\":\"analyzing\"}\n  data: {\"type\":\"progress\",\"stage\":\"generating\",\"current\":1,\"total\":5}\n  data: {\"type\":\"hypothesis\",\"hypothesis\":{...}}\n  data: {\"type\":\"hypothesis\",\"hypothesis\":{...}}\n  data: {\"type\":\"done\",\"total\":5}"
+    },
+
+    "GET /hypotheses/{hypothesisId}": {
+      "description": "Получить детальную информацию по конкретной гипотезе.",
+      "auth": false,
+      "response": {
+        "id": "string",
+        "query": "string",
+        "title": "string",
+        "description": "string",
+        "rationale": "string",
+        "sources": [{ "text": "string", "documentId": "string | null", "url": "string | null" }],
+        "novelty": "high | medium | low",
+        "noveltyRationale": "string",
+        "risks": { "technical": "string", "economic": "string" },
+        "expectedValue": "string",
+        "confidence": "number",
+        "roadmap": "Roadmap | null",
+        "feedback": "Feedback | null",
+        "createdAt": "string (ISO 8601)"
+      }
+    },
+
+    "POST /hypotheses/{hypothesisId}/roadmap": {
+      "description": "Сгенерировать дорожную карту проверки для конкретной гипотезы.",
+      "auth": false,
+      "request": {
+        "availableEquipment": ["string (опционально)"],
+        "availableMaterials": ["string (опционально)"],
+        "timeConstraint": "string (опционально, например: «3 месяца»)",
+        "budgetConstraint": "string (опционально)"
+      },
+      "response": {
+        "hypothesisId": "string",
+        "totalDuration": "string — общая оценка, например: «6–8 недель»",
+        "totalResources": "string — сводка ресурсов",
+        "steps": [
+          {
+            "order": "number (начиная с 1)",
+            "title": "string — название этапа",
+            "description": "string — что делаем (2–4 предложения)",
+            "resources": "string — оборудование, материалы, персонал",
+            "duration": "string — например: «2 недели», «5 рабочих дней»",
+            "successCriteria": "string — конкретные измеримые критерии успеха",
+            "failureCriteria": "string — при каких условиях этап считается проваленным"
+          }
+        ]
+      }
+    },
+
+    "POST /hypotheses/{hypothesisId}/feedback": {
+      "description": "Отправить обратную связь по гипотезе: подтверждена она или опровергнута. Используется для обучения системы.",
+      "auth": false,
+      "request": {
+        "status": "confirmed | refuted | partially_confirmed",
+        "notes": "string — комментарий эксперта (опционально)",
+        "actualResults": "string — что получилось на практике (опционально)"
+      },
+      "response": {
+        "hypothesisId": "string",
+        "status": "confirmed | refuted | partially_confirmed",
+        "recordedAt": "string (ISO 8601)"
+      }
+    },
+
+    "GET /history": {
+      "description": "Получить историю всех гипотез и их статусов.",
+      "auth": false,
+      "queryParams": {
+        "status": "confirmed | refuted | partially_confirmed | pending (опционально)",
+        "limit": "number (optional, default 20)",
+        "offset": "number (optional, default 0)"
+      },
+      "response": {
+        "items": [
+          {
+            "id": "string",
+            "title": "string",
+            "query": "string",
+            "novelty": "high | medium | low",
+            "confidence": "number",
+            "feedbackStatus": "confirmed | refuted | partially_confirmed | null",
+            "createdAt": "string (ISO 8601)"
+          }
+        ],
+        "total": "number",
+        "limit": "number",
+        "offset": "number"
+      }
+    },
+
+    "DELETE /history/{hypothesisId}": {
+      "description": "Удалить гипотезу из истории.",
+      "auth": false,
+      "response": { "deleted": true }
+    }
+  },
+
+  "commonTypes": {
+    "Roadmap": {
+      "hypothesisId": "string",
+      "totalDuration": "string",
+      "totalResources": "string",
+      "steps": [
+        {
+          "order": "number",
+          "title": "string",
+          "description": "string",
+          "resources": "string",
+          "duration": "string",
+          "successCriteria": "string",
+          "failureCriteria": "string"
+        }
+      ]
+    },
+    "Feedback": {
+      "status": "confirmed | refuted | partially_confirmed",
+      "notes": "string | null",
+      "actualResults": "string | null",
+      "recordedAt": "string (ISO 8601)"
+    }
+  },
+
+  "errors": {
+    "400": { "detail": "string — описание ошибки валидации" },
+    "404": { "detail": "Гипотеза не найдена" },
+    "422": { "detail": [{ "loc": ["field"], "msg": "string", "type": "string" }] },
+    "500": { "detail": "Внутренняя ошибка сервера" },
+    "503": { "detail": "Модель недоступна", "error": "model_unavailable" }
+  },
+
+  "notes": {
+    "storage": "Все данные (гипотезы, роадмапы, фидбэк) хранятся на сервере. Фронт не хранит состояние между сессиями кроме темы оформления.",
+    "llm_provider": "Yandex AI Studio (YandexGPT / Alice LLM) для текста. Qwen3.6-35B (через Yandex API) для изображений/схем.",
+    "extraction": "Извлечение контента из URL — отдельный сервис content-extraction на порту 8005 (POST /api/v1/extract).",
+    "auth": "MVP без аутентификации. В будущем — JWT или API-ключи."
+  }
+}
