@@ -34,4 +34,5 @@ class LLMStatus(BaseModel):
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "1.0.0"
+    uptime_seconds: float = 0.0
     llm: LLMStatus
