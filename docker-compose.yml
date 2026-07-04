@@ -51,6 +51,32 @@ services:
           cpus: "0.5"
           memory: "256M"
 
+  manual-analysis:
+    build:
+      context: ./manual-analysis
+      dockerfile: Dockerfile
+    container_name: manual-analysis
+    ports:
+      - "${MANUAL_ANALYSIS_PORT:-8002}:8002"
+    env_file:
+      - ./manual-analysis/.env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8002
+      - LLM_SERVICE_URL=http://llm-service:8000/api/v1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   content-extraction:
     build:
       context: ./content-extraction
