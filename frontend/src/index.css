@@ -1,0 +1,165 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-accent: oklch(0.55 0.22 280);
+  --color-accent-hover: oklch(0.48 0.22 280);
+  --color-accent-bg: oklch(0.55 0.22 280 / 0.1);
+  --color-accent-border: oklch(0.55 0.22 280 / 0.25);
+
+  --color-accent-blue: oklch(0.55 0.18 250);
+  --color-accent-blue-hover: oklch(0.48 0.18 250);
+  --color-accent-blue-bg: oklch(0.55 0.18 250 / 0.1);
+  --color-accent-blue-border: oklch(0.55 0.18 250 / 0.25);
+
+  --color-accent-green: oklch(0.55 0.18 160);
+  --color-accent-green-hover: oklch(0.48 0.18 160);
+  --color-accent-green-bg: oklch(0.55 0.18 160 / 0.1);
+  --color-accent-green-border: oklch(0.55 0.18 160 / 0.25);
+
+  --color-accent-amber: oklch(0.65 0.16 85);
+  --color-accent-amber-hover: oklch(0.58 0.16 85);
+  --color-accent-amber-bg: oklch(0.65 0.16 85 / 0.1);
+  --color-accent-amber-border: oklch(0.65 0.16 85 / 0.25);
+
+  --color-surface: oklch(0.985 0 0);
+  --color-surface-alt: oklch(0.97 0 0);
+  --color-border: oklch(0.91 0 0);
+  --color-text: oklch(0.28 0 0);
+  --color-text-muted: oklch(0.52 0 0);
+
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.04);
+  --shadow-card-hover: 0 4px 12px oklch(0 0 0 / 0.08), 0 1px 3px oklch(0 0 0 / 0.06);
+  --shadow-button: 0 1px 2px oklch(0 0 0 / 0.06);
+  --shadow-button-hover: 0 2px 8px oklch(0 0 0 / 0.1);
+  --shadow-modal: 0 20px 60px oklch(0 0 0 / 0.15), 0 0 0 1px oklch(0 0 0 / 0.05);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 0%, oklch(0.55 0.22 280 / 0.04), transparent),
+    radial-gradient(ellipse 60% 50% at 80% 100%, oklch(0.55 0.18 250 / 0.04), transparent),
+    radial-gradient(ellipse 50% 40% at 50% 50%, oklch(0.65 0.16 85 / 0.02), transparent);
+}
+
+/* Glass utility */
+.glass {
+  background: oklch(1 0 0 / 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid oklch(0 0 0 / 0.06);
+}
+
+.glass-strong {
+  background: oklch(1 0 0 / 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid oklch(0 0 0 / 0.08);
+}
+
+/* Dark theme */
+.dark body,
+body.dark {
+  --color-surface: oklch(0.16 0.01 260);
+  --color-surface-alt: oklch(0.19 0.01 260);
+  --color-border: oklch(0.25 0.01 260);
+  --color-text: oklch(0.9 0 0);
+  --color-text-muted: oklch(0.6 0 0);
+}
+
+.dark {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.dark #root {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 0%, oklch(0.55 0.22 280 / 0.08), transparent),
+    radial-gradient(ellipse 60% 50% at 80% 100%, oklch(0.55 0.18 250 / 0.08), transparent);
+}
+
+.dark .glass {
+  background: oklch(0.22 0.01 260 / 0.72);
+  border-color: oklch(1 0 0 / 0.06);
+}
+
+.dark .glass-strong {
+  background: oklch(0.22 0.01 260 / 0.82);
+  border-color: oklch(1 0 0 / 0.08);
+}
+
+.dark .bg-white {
+  background-color: oklch(0.22 0.01 260);
+}
+
+.dark .bg-gray-100 {
+  background-color: oklch(0.25 0.01 260);
+}
+
+.dark .bg-gray-50 {
+  background-color: oklch(0.2 0.01 260);
+}
+
+.dark .text-gray-600 {
+  color: oklch(0.7 0 0);
+}
+
+.dark .hover\:bg-black\/5 {
+  &:hover { background-color: oklch(1 0 0 / 0.06); }
+}
+
+.dark .hover\:bg-gray-100 {
+  &:hover { background-color: oklch(0.25 0.01 260); }
+}
+
+.dark .text-white {
+  color: oklch(0.15 0.01 260);
+}
+
+.dark .bg-black\/30 {
+  background-color: oklch(0 0 0 / 0.5);
+}
+
+.dark .bg-black\/40 {
+  background-color: oklch(0 0 0 / 0.6);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 60% { opacity: 0.2; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
