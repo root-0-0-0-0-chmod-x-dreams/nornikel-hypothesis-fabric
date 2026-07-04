@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { X, FileText, Globe, ExternalLink, Clock, HardDrive, Info, Eye, FileCode } from "lucide-react";
 import { Badge, Tabs, AttentionView, Progress } from "@/components/ui";
 import type { Document } from "@/types";
@@ -142,8 +144,14 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
             </div>
           )}
           <div className="px-5 pb-5">
-            <div className="prose prose-sm max-w-none text-text leading-relaxed whitespace-pre-wrap">
-              {content.text}
+            <div className="prose prose-sm max-w-none dark:prose-invert
+              prose-pre:bg-gray-100 prose-pre:rounded-xl prose-pre:border prose-pre:border-border
+              prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-xs prose-code:before:content-none prose-code:after:content-none
+              dark:prose-pre:bg-gray-800/50 dark:prose-code:bg-gray-800/50
+            ">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {content.markdown}
+              </ReactMarkdown>
             </div>
           </div>
         </div>
