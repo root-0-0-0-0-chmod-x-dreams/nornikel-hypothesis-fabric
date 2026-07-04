@@ -44,9 +44,9 @@ export function Sidebar({ open, width, children, activeTab, onTabChange, onAddDo
           })}
         </nav>
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-3">{children}</div>
-        <div className="p-3 border-t border-border flex-shrink-0">
+        <div className="py-4 px-3 border-t border-border flex-shrink-0">
           <Button
-            variant="secondary"
+            variant="primary"
             size="sm"
             className="w-full"
             icon={<Plus size={14} />}
