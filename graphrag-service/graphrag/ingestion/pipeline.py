@@ -14,7 +14,13 @@ from graphrag.ingestion.constraints import (
 )
 from graphrag.ingestion.excel_parser import _slugify, parse_excel_file
 from graphrag.ingestion.md_book_parser import parse_md_books
-from graphrag.ingestion.md_monolithic_parser import parse_literature_md
+from graphrag.ingestion.graph_cache import (
+    invalidate_graph_cache,
+    save_graph_cache,
+    try_load_graph_cache,
+)
+from graphrag.ingestion.literature_gate import literature_needs_parse
+from graphrag.ingestion.md_monolithic_parser import MonolithicParseResult, parse_literature_md
 from graphrag.ingestion.md_parser import parse_md_buckets
 from graphrag.ingestion.pdf_graph_linker import (
     ensure_reagent_catalog_nodes,
@@ -31,6 +37,7 @@ from graphrag.ingestion.paths import (
 from graphrag.ingestion.pdf_parser import parse_pdf_file
 from graphrag.ingestion.schemes import parse_image_files
 from graphrag.constants import BOOK_CHUNK_GRANULARITY
+from graphrag.models import Chunk, GraphEdge, GraphNode
 from graphrag.schema import NodeType
 from graphrag.vector_factory import create_vector_store
 from graphrag.vector_protocol import VectorStoreProtocol
@@ -96,7 +103,11 @@ class KnowledgeBaseLoader:
             if chunk.metadata.get("doc_id")
         }
 
-        literature_result = parse_literature_md(resolve_literature_root())
+        literature_result = (
+            parse_literature_md(resolve_literature_root())
+            if literature_needs_parse(self._data_root, resolve_literature_root())
+            else MonolithicParseResult(chunks=[], books=[])
+        )
 
         if literature_result.chunks:
             for chunk in literature_result.chunks:
@@ -158,7 +169,7 @@ class KnowledgeBaseLoader:
             reload_vectors=should_reload_vectors,
         )
 
-        return LoadedKnowledgeBase(
+        loaded = LoadedKnowledgeBase(
             graph=store,
             vectors=vector_store,
             stats={
@@ -198,6 +209,11 @@ class KnowledgeBaseLoader:
             },
         )
 
+        if isinstance(store, NetworkXGraphStore):
+            save_graph_cache(self._data_root, store, loaded.stats)
+
+        return loaded
+
     @staticmethod
     def _apply_to_stores(
         graph: GraphStoreProtocol,
@@ -214,10 +230,14 @@ class KnowledgeBaseLoader:
         if reload_vectors and hasattr(vectors, "clear"):
             vectors.clear()
 
-        for node in nodes:
-            graph.add_node(node)
+        if hasattr(graph, "add_nodes_bulk"):
+            graph.add_nodes_bulk(nodes)
+        else:
+            for node in nodes:
+                graph.add_node(node)
 
         seen_edges: set[tuple[str, str, str]] = set()
+        unique_edges: list[GraphEdge] = []
 
         for edge in edges:
             key = (edge.source, edge.relation, edge.target)
@@ -226,7 +246,13 @@ class KnowledgeBaseLoader:
                 continue
 
             seen_edges.add(key)
-            graph.add_edge(edge)
+            unique_edges.append(edge)
+
+        if hasattr(graph, "add_edges_bulk"):
+            graph.add_edges_bulk(unique_edges)
+        else:
+            for edge in unique_edges:
+                graph.add_edge(edge)
 
         if reload_vectors:
             vectors.add_many(chunks)
@@ -238,10 +264,33 @@ def load_knowledge_base(
     vectors: VectorStoreProtocol | None = None,
     *,
     reload_vectors: bool | None = None,
+    use_graph_cache: bool | None = None,
 ) -> LoadedKnowledgeBase:
-    loader = KnowledgeBaseLoader(data_root or DEFAULT_DATA_ROOT)
+    root = data_root or DEFAULT_DATA_ROOT
+    vector_store = vectors or create_vector_store()
+    should_reload_vectors = (
+        reload_vectors
+        if reload_vectors is not None
+        else not _qdrant_has_indexed_data(vector_store)
+    )
 
-    return loader.load(graph=graph, vectors=vectors, reload_vectors=reload_vectors)
+    if graph is None and use_graph_cache is not False:
+        cached = try_load_graph_cache(root)
+
+        if cached is not None and not should_reload_vectors:
+            return LoadedKnowledgeBase(
+                graph=cached.graph,
+                vectors=vector_store,
+                stats=dict(cached.stats),
+            )
+
+    loader = KnowledgeBaseLoader(root)
+
+    return loader.load(
+        graph=graph,
+        vectors=vector_store,
+        reload_vectors=reload_vectors,
+    )
 
 
 def _qdrant_has_indexed_data(vector_store: VectorStoreProtocol, *, min_points: int = 100) -> bool:

@@ -100,6 +100,7 @@ class GraphRAGQueryService:
         )
         channel_map: dict[str, set[str]] = {}
         weighted_rankings: list[tuple[list[str], float]] = []
+        hypothesis_probe: list[dict[str, Any]] = []
 
         if use_graph and graph_hits:
             graph_ranking = [chunk_id for chunk_id, _ in graph_hits]
@@ -113,7 +114,7 @@ class GraphRAGQueryService:
             self._tag_graph_channels(channel_map, graph_ranking)
 
         for index, query_text in enumerate(active_queries):
-            vector_rankings, partial_map = self._vector_rankings(
+            vector_rankings, partial_map, probe_hits = self._vector_rankings(
                 question=query_text,
                 factory=factory_name,
                 external=external_filter,
@@ -124,6 +125,18 @@ class GraphRAGQueryService:
             )
             weighted_rankings.extend(vector_rankings)
             self._merge_channel_map(channel_map, partial_map)
+
+            if len(active_queries) > 1 and probe_hits:
+                hypothesis_probe.append(
+                    {
+                        "index": index,
+                        "retrieval_query": query_text,
+                        "top_chunks": [
+                            {"chunk_id": chunk_id, "score": score}
+                            for chunk_id, score in probe_hits[:5]
+                        ],
+                    }
+                )
 
         fused = weighted_rrf_fuse(
             weighted_rankings,
@@ -178,6 +191,7 @@ class GraphRAGQueryService:
             channel_hits=self._channel_hits(channel_map),
             expanded_query=enriched_query,
             abc_evidence=abc_chain.to_dict() if abc_chain else None,
+            hypothesis_probe=hypothesis_probe,
         )
 
     def _vector_rankings(
@@ -190,9 +204,10 @@ class GraphRAGQueryService:
         k_dense: int,
         k_bm25: int,
         include_constraints: bool = True,
-    ) -> tuple[list[tuple[list[str], float]], dict[str, set[str]]]:
+    ) -> tuple[list[tuple[list[str], float]], dict[str, set[str]], list[tuple[str, float]]]:
         channel_map: dict[str, set[str]] = {}
         weighted: list[tuple[list[str], float]] = []
+        probe_hits: list[tuple[str, float]] = []
 
         if include_constraints and hasattr(self._vectors, "fetch_by_chunk_types"):
             constraint_hits = self._vectors.fetch_by_chunk_types(
@@ -218,13 +233,14 @@ class GraphRAGQueryService:
                 factory=factory,
                 external=external,
             )
+            probe_hits = hybrid_hits
             hybrid_ranking = [chunk_id for chunk_id, _ in hybrid_hits]
 
             if hybrid_ranking:
                 weighted.append((hybrid_ranking, RRF_WEIGHT_HYBRID))
                 self._mark_channel(channel_map, hybrid_ranking, CHANNEL_HYBRID)
 
-            return weighted, channel_map
+            return weighted, channel_map, probe_hits
 
         dense_hits = self._vectors.dense_search(
             question,
@@ -249,7 +265,9 @@ class GraphRAGQueryService:
             weighted.append((bm25_ranking, RRF_WEIGHT_BM25))
             self._mark_channel(channel_map, bm25_ranking, CHANNEL_BM25)
 
-        return weighted, channel_map
+        probe_hits = dense_hits[:5] if dense_hits else bm25_hits[:5]
+
+        return weighted, channel_map, probe_hits
 
     def _resolve_retrieval_queries(
         self,

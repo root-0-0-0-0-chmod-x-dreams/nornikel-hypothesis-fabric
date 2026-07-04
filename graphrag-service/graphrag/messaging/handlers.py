@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from graphrag.graph.base import GraphStoreProtocol
 from graphrag.ingestion.external_source import apply_external_ingest, ingest_external_source
 from graphrag.ingestion.md_ingest import apply_md_ingest, ingest_markdown_document
+from graphrag.ingestion.graph_cache import invalidate_graph_cache
 from graphrag.ingestion.pipeline import load_knowledge_base
 from graphrag.messaging.schemas import (
     MSG_CHUNK_UPSERT,
@@ -41,7 +42,7 @@ class MessageHandlerContext:
     graph: GraphStoreProtocol
     vectors: VectorStoreProtocol
     graph_rag: GraphRAGQueryService
-    nl_cypher: NLGraphQueryService
+    nl_cypher: NLGraphQueryService | None = None
 
     @classmethod
     def create(cls) -> MessageHandlerContext:
@@ -52,16 +53,26 @@ class MessageHandlerContext:
             graph=loaded.graph,
             vectors=loaded.vectors,
             graph_rag=graph_rag,
-            nl_cypher=NLGraphQueryService(),
+            nl_cypher=None,
         )
 
     def reload(self) -> dict[str, int]:
-        loaded = load_knowledge_base(graph=self.graph)
+        invalidate_graph_cache()
+        loaded = load_knowledge_base(
+            graph=self.graph,
+            use_graph_cache=False,
+        )
         self.vectors = loaded.vectors
         self.graph_rag = GraphRAGQueryService(loaded.graph, loaded.vectors)
-        self.nl_cypher = NLGraphQueryService()
+        self.nl_cypher = None
 
         return loaded.stats
+
+    def nl_cypher_service(self) -> NLGraphQueryService:
+        if self.nl_cypher is None:
+            self.nl_cypher = NLGraphQueryService()
+
+        return self.nl_cypher
 
 
 class MessageHandler:
@@ -143,7 +154,7 @@ class MessageHandler:
         return ok_response(unified_result_to_dict(result))
 
     def _handle_nl_cypher_query(self, payload: dict) -> dict:
-        answer = self._ctx.nl_cypher.ask(str(payload["question"]))
+        answer = self._ctx.nl_cypher_service().ask(str(payload["question"]))
 
         return ok_response(
             {
@@ -168,6 +179,7 @@ class MessageHandler:
             factory=payload.get("factory"),
         )
         apply_md_ingest(self._ctx.graph, self._ctx.vectors, result)
+        invalidate_graph_cache()
         self._ctx.graph_rag = GraphRAGQueryService(self._ctx.graph, self._ctx.vectors)
 
         chunk_types = sorted({chunk.chunk_type for chunk in result.chunks})
@@ -194,6 +206,7 @@ class MessageHandler:
             granularity=str(payload.get("granularity", "paragraph")),
         )
         apply_external_ingest(self._ctx.graph, self._ctx.vectors, result)
+        invalidate_graph_cache()
         self._ctx.graph_rag = GraphRAGQueryService(self._ctx.graph, self._ctx.vectors)
 
         return ok_response(

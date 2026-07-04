@@ -76,3 +76,4 @@ class GraphRAGResult:
     channel_hits: dict[str, int] = field(default_factory=dict)
     expanded_query: str | None = None
     abc_evidence: dict[str, Any] | None = None
+    hypothesis_probe: list[dict[str, Any]] = field(default_factory=list)

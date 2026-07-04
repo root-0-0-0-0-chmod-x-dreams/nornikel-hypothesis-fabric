@@ -119,6 +119,14 @@ class NetworkXGraphStore:
 
         return paths[:max_paths], sorted(visited_nodes)
 
+    def add_nodes_bulk(self, nodes: list[GraphNode]) -> None:
+        for node in nodes:
+            self.add_node(node)
+
+    def add_edges_bulk(self, edges: list[GraphEdge]) -> None:
+        for edge in edges:
+            self.add_edge(edge)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "nodes": [

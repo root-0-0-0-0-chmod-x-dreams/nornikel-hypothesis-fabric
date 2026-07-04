@@ -116,13 +116,17 @@ class UnifiedGraphRAGService:
             hypotheses,
             graph_rag,
             probe_support=(
-                self._graph_rag.probe_hypothesis_support(
-                    retrieval_queries,
-                    factory=factory,
-                    include_external=request.include_external,
+                graph_rag.hypothesis_probe
+                if request.include_hypothesis_support and graph_rag.hypothesis_probe
+                else (
+                    self._graph_rag.probe_hypothesis_support(
+                        retrieval_queries,
+                        factory=factory,
+                        include_external=request.include_external,
+                    )
+                    if request.include_hypothesis_support and len(retrieval_queries) > 1
+                    else []
                 )
-                if request.include_hypothesis_support and len(retrieval_queries) > 1
-                else []
             ),
         )
 

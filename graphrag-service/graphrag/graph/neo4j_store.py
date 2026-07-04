@@ -181,6 +181,53 @@ class Neo4jGraphStore:
 
         return paths[:max_paths], node_ids
 
+    def add_nodes_bulk(self, nodes: list[GraphNode], *, batch_size: int = 500) -> None:
+        for offset in range(0, len(nodes), batch_size):
+            rows = []
+
+            for node in nodes[offset : offset + batch_size]:
+                props: dict[str, Any] = {
+                    "node_id": node.node_id,
+                    "node_type": node.node_type,
+                    "label": node.label or node.node_id,
+                    **node.attributes,
+                }
+                rows.append({"node_id": node.node_id, "props": props})
+
+            cypher = f"""
+            UNWIND $rows AS row
+            MERGE (n:{NEO4J_ENTITY_LABEL} {{node_id: row.node_id}})
+            SET n += row.props
+            """
+            with self._session() as session:
+                session.run(cypher, rows=rows)
+
+    def add_edges_bulk(self, edges: list[GraphEdge], *, batch_size: int = 500) -> None:
+        grouped: dict[str, list[dict[str, Any]]] = {}
+
+        for edge in edges:
+            rel = _sanitize_rel_type(edge.relation)
+            grouped.setdefault(rel, []).append(
+                {
+                    "source": edge.source,
+                    "target": edge.target,
+                    "props": edge.attributes,
+                }
+            )
+
+        for rel, rows in grouped.items():
+            for offset in range(0, len(rows), batch_size):
+                batch = rows[offset : offset + batch_size]
+                cypher = f"""
+                UNWIND $rows AS row
+                MATCH (a:{NEO4J_ENTITY_LABEL} {{node_id: row.source}})
+                MATCH (b:{NEO4J_ENTITY_LABEL} {{node_id: row.target}})
+                MERGE (a)-[r:{rel}]->(b)
+                SET r += row.props
+                """
+                with self._session() as session:
+                    session.run(cypher, rows=batch)
+
 
 def _sanitize_rel_type(relation: str) -> str:
     cleaned = relation.strip().upper().replace(" ", "_")
