@@ -5,13 +5,14 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+ARG INSTALL_JAVA=true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
-    openjdk-21-jre-headless \
+    g++ \
     curl \
     libgl1 \
     libglib2.0-0 \
@@ -20,13 +21,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     libgomp1 \
     libspatialindex-dev \
+    && if [ "$INSTALL_JAVA" = "true" ]; then \
+        apt-get install -y --no-install-recommends openjdk-21-jre-headless; \
+    fi \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --upgrade pip setuptools wheel
 
 COPY requirements.txt .
 
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt \
+    && apt-get remove -y build-essential gcc g++ \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY app ./app
 
@@ -34,6 +41,8 @@ RUN mkdir -p \
     /app/images \
     /app/uploads \
     /app/output
+
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
 EXPOSE 8001
 
