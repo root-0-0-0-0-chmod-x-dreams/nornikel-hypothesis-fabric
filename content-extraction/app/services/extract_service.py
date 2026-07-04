@@ -41,7 +41,6 @@ class ExtractService:
             title=article.title,
             markdown=markdown_document.markdown,
             text=article.text,
-            excerpt=article.excerpt,
             byline=article.byline,
             html=article.html,
             metadata=metadata,

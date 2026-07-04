@@ -61,6 +61,6 @@ class BrowserService:
 
         question_id = match.group("question_id")
         return (
-            "https://stackoverflow.com/questions/"
-            f"{question_id}/stackprinter?service=stackoverflow&language=en&hideAnswers=false&showAll=true&width=640"
+            "https://stackprinter.appspot.com/export?"
+            f"question={question_id}&service=stackoverflow&language=en&hideAnswers=false&showAll=true&width=640"
         )

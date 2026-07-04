@@ -19,7 +19,6 @@ class ExtractResponse(BaseModel):
     title: str | None = None
     markdown: str
     text: str
-    excerpt: str | None = None
     byline: str | None = None
     html: str
     metadata: Metadata

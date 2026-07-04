@@ -132,10 +132,6 @@ class BrowserPool:
                 page = await self._context.new_page()
 
             response = await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-            try:
-                await page.wait_for_load_state("networkidle", timeout=min(5000, timeout_ms))
-            except Exception:
-                pass
 
             try:
                 html = await page.content()
@@ -171,14 +167,7 @@ class BrowserPool:
                 await self._pages.put(replacement)
                 return
 
-            try:
-                await page.goto("about:blank", wait_until="load", timeout=5000)
-            except Exception:
-                await page.close()
-                replacement = await self._context.new_page()
-                await self._pages.put(replacement)
-            else:
-                await self._pages.put(page)
+            await self._pages.put(page)
 
     def _has_security_interstitial(self, html: str) -> bool:
         return (
