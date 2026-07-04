@@ -1,0 +1,13 @@
+fastapi==0.115.6
+uvicorn[standard]
+python-dotenv
+pydantic
+python-multipart
+
+opendataloader-pdf
+docx2md
+openpyxl
+pandas
+tabulate
+xls2xlsx
+markdownify

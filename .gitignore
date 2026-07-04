@@ -11,6 +11,9 @@ build/
 local-data/
 external-data/
 */.env
+temp/
+images/
+test*
 .DS_*
 *.log
 logs

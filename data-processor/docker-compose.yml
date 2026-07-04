@@ -1,0 +1,41 @@
+services:
+  data-processor:
+    build: .
+    container_name: data-processor
+    ports:
+      - "${PORT:-8001}:8001"
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8001
+      - IMAGES_DIR=/app/images
+      - UPLOADS_DIR=/app/uploads
+      - OUTPUT_DIR=/app/output
+    volumes:
+      - images_data:/app/images
+      - output_data:/app/output
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "1G"
+        reservations:
+          cpus: "0.5"
+          memory: "512M"
+
+volumes:
+  images_data:
+  output_data:
