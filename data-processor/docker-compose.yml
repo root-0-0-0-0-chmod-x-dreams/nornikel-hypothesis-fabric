@@ -12,6 +12,16 @@ services:
       - IMAGES_DIR=/app/images
       - UPLOADS_DIR=/app/uploads
       - OUTPUT_DIR=/app/output
+      - PDF_LIBRARY=${PDF_LIBRARY:-opendataloader}
+      - PDF_IMAGE_OUTPUT=${PDF_IMAGE_OUTPUT:-external}
+      - PDF_IMAGE_FORMAT=${PDF_IMAGE_FORMAT:-jpeg}
+      - PDF_HYBRID_ENABLED=${PDF_HYBRID_ENABLED:-false}
+      - PDF_HYBRID_BACKEND=${PDF_HYBRID_BACKEND:-docling-fast}
+      - PDF_HYBRID_URL=${PDF_HYBRID_URL:-http://hybrid-server:5002}
+      - PDF_HYBRID_MODE=${PDF_HYBRID_MODE:-auto}
+      - OCR_ENABLED=${OCR_ENABLED:-false}
+      - OCR_LANGUAGES=${OCR_LANGUAGES:-ru,en}
+      - OCR_GPU_ENABLED=${OCR_GPU_ENABLED:-false}
     volumes:
       - images_data:/app/images
       - output_data:/app/output
@@ -21,7 +31,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 30s
     logging:
       driver: "json-file"
       options:
@@ -31,10 +41,28 @@ services:
       resources:
         limits:
           cpus: "2"
-          memory: "1G"
+          memory: "4G"
         reservations:
           cpus: "0.5"
-          memory: "512M"
+          memory: "1G"
+
+  hybrid-server:
+    profiles: ["hybrid"]
+    image: python:3.12-slim
+    container_name: hybrid-server
+    command: >
+      sh -c "
+        pip install 'opendataloader-pdf[hybrid]' &&
+        opendataloader-pdf-hybrid --host 0.0.0.0 --port 5002 --force-ocr --ocr-lang ${OCR_LANGUAGES:-ru,en}
+      "
+    ports:
+      - "5002:5002"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: "8G"
 
 volumes:
   images_data:
