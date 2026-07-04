@@ -12,9 +12,17 @@ interface AppLayoutProps {
 }
 
 const MIN_SIDEBAR = 260;
-const MAX_SIDEBAR = 500;
+const MAX_SIDEBAR_PCT = 0.35;
 const MIN_DETAIL = 320;
-const MAX_DETAIL = 600;
+const MAX_DETAIL_PCT = 0.45;
+
+function maxSidebar(): number {
+  return Math.max(500, Math.round(window.innerWidth * MAX_SIDEBAR_PCT));
+}
+
+function maxDetail(): number {
+  return Math.max(600, Math.round(window.innerWidth * MAX_DETAIL_PCT));
+}
 
 export function AppLayout({
   children,
@@ -44,10 +52,10 @@ export function AppLayout({
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (draggingSidebar.current) {
-        setSidebarWidth(Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, e.clientX)));
+        setSidebarWidth(Math.min(maxSidebar(), Math.max(MIN_SIDEBAR, e.clientX)));
       }
       if (draggingDetail.current) {
-        setDetailWidth(Math.min(MAX_DETAIL, Math.max(MIN_DETAIL, window.innerWidth - e.clientX)));
+        setDetailWidth(Math.min(maxDetail(), Math.max(MIN_DETAIL, window.innerWidth - e.clientX)));
       }
     };
     const onMouseUp = () => {

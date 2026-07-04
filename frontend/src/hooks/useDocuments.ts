@@ -1,5 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { Document, ExtractedContent } from "@/types";
+
+const STORAGE_KEY = "nornikel_documents";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10);
@@ -35,6 +37,45 @@ const DEMO_DOCS: Document[] = [
   },
 ];
 
+function serializeDoc(doc: Document): Record<string, unknown> {
+  const { blobUrl: _, ...rest } = doc;
+  return {
+    ...rest,
+    uploadedAt: doc.uploadedAt.toISOString(),
+  };
+}
+
+function deserializeDoc(raw: Record<string, unknown>): Document {
+  return {
+    ...raw,
+    uploadedAt: new Date(raw.uploadedAt as string),
+    blobUrl: undefined,
+    size: raw.size as number | undefined,
+  } as Document;
+}
+
+function loadDocs(): Document[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw) as Record<string, unknown>[];
+      if (arr.length > 0) return arr.map(deserializeDoc);
+    }
+  } catch {
+    // corrupted data, fall through to demo
+  }
+  return DEMO_DOCS;
+}
+
+function saveDocs(docs: Document[]) {
+  try {
+    const serialized = docs.map(serializeDoc);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+  } catch {
+    // quota exceeded or other error, silently fail
+  }
+}
+
 async function extractUrl(url: string): Promise<ExtractedContent> {
   const res = await fetch("/api/v1/extract", {
     method: "POST",
@@ -67,8 +108,12 @@ async function extractUrl(url: string): Promise<ExtractedContent> {
 }
 
 export function useDocuments() {
-  const [documents, setDocuments] = useState<Document[]>(DEMO_DOCS);
+  const [documents, setDocuments] = useState<Document[]>(() => loadDocs());
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    saveDocs(documents);
+  }, [documents]);
 
   const addByUrl = useCallback(async (url: string) => {
     setUploading(true);
