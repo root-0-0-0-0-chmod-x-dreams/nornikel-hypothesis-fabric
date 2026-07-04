@@ -9,11 +9,14 @@ cd llm-service
 cp .env.example .env
 ```
 
-Отредактируйте `.env`, указав реальные значения:
+Отредактируйте `.env`, указав реальные значения (Yandex как primary, DeepSeek как fallback):
 
 ```env
 YANDEX_FOLDER_ID=b1g**********
 YANDEX_API_KEY=AQVN**********
+DEEPSEEK_API_KEY=sk-**********
+DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_BASE_URL=https://api.deepseek.com
 ```
 
 ### 2. Запуск через Docker (рекомендуется)
@@ -62,7 +65,8 @@ curl http://localhost:8000/api/v1/health
   "version": "1.0.0",
   "uptime_seconds": 123.4,
   "models_count": 3,
-  "yandex_configured": true
+  "yandex_configured": true,
+  "deepseek_configured": true
 }
 ```
 
@@ -185,11 +189,11 @@ curl -X POST http://localhost:8000/api/v1/chat/stream \
 | HTTP | Код | Описание |
 |------|-----|----------|
 | 429 | `RATE_LIMITED` | Превышен лимит запросов к модели |
-| 500 | `NOT_CONFIGURED` | Не заданы `YANDEX_FOLDER_ID` / `YANDEX_API_KEY` |
-| 502 | `CONNECTION_ERROR` | Ошибка соединения с Yandex API |
+| 500 | `NOT_CONFIGURED` | Не заданы параметры ни одного провайдера (`YANDEX_*` или `DEEPSEEK_API_KEY`) |
+| 502 | `CONNECTION_ERROR` | Ошибка соединения с LLM API |
 | 503 | `MODEL_UNAVAILABLE` | Запрошенная модель недоступна |
 | 503 | `QUEUE_TIMEOUT` | Истекло время ожидания в очереди |
-| 504 | `TIMEOUT` | Истекло время ожидания ответа от Yandex API |
+| 504 | `TIMEOUT` | Истекло время ожидания ответа от LLM API |
 
 ## Тонкие моменты
 
@@ -197,9 +201,11 @@ curl -X POST http://localhost:8000/api/v1/chat/stream \
 
 Yandex AI Studio разрешает **не более 10 одновременных синхронных генераций**. Сервис использует `asyncio.Semaphore(10)` для соблюдения этого лимита. Все запросы сверх лимита становятся в очередь и ждут освобождения слота (до `REQUEST_TIMEOUT_SECONDS`).
 
-### 2. Fallback-модели
+### 2. Provider fallback (Yandex -> DeepSeek)
 
-Если запрошенная модель недоступна, сервис автоматически переключается на первую доступную модель. Это поведение логируется (уровень INFO) с тегами `requested` и `fallback`.
+Если запрос к Yandex завершился ошибкой соединения, таймаутом, rate-limit или серверной ошибкой, сервис автоматически повторяет запрос на DeepSeek (`DEEPSEEK_MODEL`, по умолчанию `deepseek-v4-flash`) при наличии `DEEPSEEK_API_KEY`.
+
+Если запрошенная модель недоступна по статусу health-check, сервис также переключается на первую доступную модель. Это поведение логируется с тегами `requested` и `fallback`.
 
 ### 3. Health-check моделей
 

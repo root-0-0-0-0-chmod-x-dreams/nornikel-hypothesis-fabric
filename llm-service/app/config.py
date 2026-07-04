@@ -22,6 +22,20 @@ class Config:
             "YANDEX_BASE_URL", "https://ai.api.cloud.yandex.net/v1"
         )
     )
+    deepseek_api_key: str = field(
+        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", "")
+    )
+    deepseek_model: str = field(
+        default_factory=lambda: os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+    )
+    deepseek_base_url: str = field(
+        default_factory=lambda: os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+    )
+    deepseek_anthropic_base_url: str = field(
+        default_factory=lambda: os.getenv(
+            "DEEPSEEK_ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic"
+        )
+    )
 
     default_model: str = field(
         default_factory=lambda: os.getenv("DEFAULT_MODEL", "aliceai-llm")
@@ -65,6 +79,18 @@ class Config:
     @property
     def is_configured(self) -> bool:
         return bool(self.yandex_folder_id and self.yandex_api_key)
+
+    @property
+    def is_yandex_configured(self) -> bool:
+        return self.is_configured
+
+    @property
+    def is_deepseek_configured(self) -> bool:
+        return bool(self.deepseek_api_key)
+
+    @property
+    def has_any_provider(self) -> bool:
+        return self.is_yandex_configured or self.is_deepseek_configured
 
 
 _config: Optional[Config] = None

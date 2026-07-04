@@ -44,6 +44,8 @@ class ModelManager:
         logger.info("registered_model", extra={"model": model_id})
 
     def get_full_model_id(self, model_id: str) -> str:
+        if model_id == self.config.deepseek_model or model_id.startswith("deepseek-"):
+            return model_id
         return f"gpt://{self.config.yandex_folder_id}/{model_id}"
 
     def is_available(self, model_id: str) -> bool:
