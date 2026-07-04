@@ -10,6 +10,9 @@ from graphrag.constants import CASE_DATA_DIRNAME, CASE_TASK_DIRNAME
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
 _env_root = os.getenv("GRAPHRAG_DATA_ROOT")
 
+BUNDLED_CASE_ROOT = SERVICE_ROOT / "data" / "case"
+LITERATURE_MD_ROOT = SERVICE_ROOT / "data" / "literature"
+
 _LOCAL_DATA_ROOT = SERVICE_ROOT / CASE_DATA_DIRNAME / CASE_TASK_DIRNAME
 # monorepo layout: hackathon/nornikel-hypothesis-fabric/graphrag-service/
 _MONOREPO_DATA_ROOT = (
@@ -20,10 +23,10 @@ _MONOREPO_DATA_ROOT = (
 def _default_data_root() -> Path:
     if _env_root:
         return Path(_env_root).expanduser()
-    for candidate in (_LOCAL_DATA_ROOT, _MONOREPO_DATA_ROOT):
+    for candidate in (BUNDLED_CASE_ROOT, _LOCAL_DATA_ROOT, _MONOREPO_DATA_ROOT):
         if candidate.is_dir():
             return candidate
-    return _LOCAL_DATA_ROOT
+    return BUNDLED_CASE_ROOT
 
 
 DEFAULT_DATA_ROOT = _default_data_root()
@@ -45,3 +48,7 @@ def resolve_data_root(root: Path | None = None) -> Path:
         raise FileNotFoundError(f"Case data directory not found: {path}")
 
     return path
+
+
+def resolve_literature_root() -> Path:
+    return LITERATURE_MD_ROOT

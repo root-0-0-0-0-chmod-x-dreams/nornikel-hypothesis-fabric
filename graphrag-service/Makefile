@@ -1,10 +1,27 @@
-.PHONY: install test demo bootstrap lint format infra-up neo4j-seed neo4j-check qdrant-check ask-graph rmq-worker rmq-query gradio-studio excel-to-md pdf-to-md graph-html graph-view
+.PHONY: install test demo bootstrap lint format infra-up neo4j-seed neo4j-check qdrant-check ask-graph rmq-worker rmq-query gradio-studio excel-to-md pdf-to-md graph-html graph-view sync-data
+
+CASE_SRC ?= $(CURDIR)/../../Задача 1. Фабрика гипотез/Задача 1
+DATA_CASE := $(CURDIR)/data/case
+DATA_LIT := $(CURDIR)/data/literature
 
 install:
 	python3 -m pip install -r requirements.txt
 
 test:
 	python3 -m pytest tests/ -q
+
+sync-data:
+	@test -d "$(CASE_SRC)" || (echo "CASE_SRC not found: $(CASE_SRC)" && exit 1)
+	mkdir -p "$(DATA_CASE)/Дополнительные материалы/md" "$(DATA_LIT)"
+	rsync -a "$(CASE_SRC)/Пример 1/" "$(CASE_SRC)/Пример 2/" "$(CASE_SRC)/Пример 3/" "$(CASE_SRC)/Пример 4/" "$(DATA_CASE)/"
+	rsync -a "$(CASE_SRC)/Дополнительные материалы/md/geokniga_"* "$(CASE_SRC)/Дополнительные материалы/md/tehnologiya_"* "$(DATA_CASE)/Дополнительные материалы/md/"
+	rsync -a "$(CASE_SRC)/Дополнительные материалы/md/md/" "$(DATA_LIT)/"
+	@echo "Synced case + literature → data/"
+
+literature-chunks:
+	python3 scripts/monolithic_to_chunks.py
+
+sync-data-full: sync-data literature-chunks
 
 bootstrap:
 	python3 scripts/bootstrap_kb.py

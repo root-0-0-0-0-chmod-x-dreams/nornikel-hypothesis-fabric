@@ -14,7 +14,14 @@ make rmq-query         # smoke test
 make test
 ```
 
-Case data must be available at `GRAPHRAG_DATA_ROOT` or `./Задача 1. Фабрика гипотез/Задача 1` relative to this directory.
+Case data: bundled in `data/case` (Excel) + `data/literature` (book MD). Refresh from hackathon case:
+
+```bash
+make sync-data       # copy Excel + md/md → data/
+make bootstrap       # Qdrant + graph
+```
+
+Override path: `GRAPHRAG_DATA_ROOT`. Default picks `data/case` if present.
 
 ## Docker
 

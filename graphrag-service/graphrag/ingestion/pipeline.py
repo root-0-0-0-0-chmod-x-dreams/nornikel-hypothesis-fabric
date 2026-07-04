@@ -12,8 +12,9 @@ from graphrag.ingestion.constraints import (
     build_constraint_chunks,
     build_factory_equipment_edges,
 )
-from graphrag.ingestion.excel_parser import parse_excel_file
+from graphrag.ingestion.excel_parser import _slugify, parse_excel_file
 from graphrag.ingestion.md_book_parser import parse_md_books
+from graphrag.ingestion.md_monolithic_parser import parse_literature_md
 from graphrag.ingestion.md_parser import parse_md_buckets
 from graphrag.ingestion.pdf_graph_linker import (
     ensure_reagent_catalog_nodes,
@@ -25,6 +26,7 @@ from graphrag.ingestion.paths import (
     DEFAULT_DATA_ROOT,
     EXCEL_SOURCES,
     resolve_data_root,
+    resolve_literature_root,
 )
 from graphrag.ingestion.pdf_parser import parse_pdf_file
 from graphrag.ingestion.schemes import parse_image_files
@@ -86,8 +88,35 @@ class KnowledgeBaseLoader:
 
         book_result = parse_md_books(self._data_root)
         chunks.extend(book_result.chunks)
+        books = list(book_result.books)
 
-        if book_result.chunks:
+        loaded_doc_ids = {
+            str(chunk.metadata.get("doc_id"))
+            for chunk in book_result.chunks
+            if chunk.metadata.get("doc_id")
+        }
+
+        literature_result = parse_literature_md(resolve_literature_root())
+
+        if literature_result.chunks:
+            for chunk in literature_result.chunks:
+                doc_id = str(chunk.metadata.get("doc_id") or "")
+
+                if doc_id and doc_id in loaded_doc_ids:
+                    continue
+
+                chunks.append(chunk)
+
+            books = sorted(
+                set(books)
+                | {
+                    book
+                    for book in literature_result.books
+                    if _slugify(book) not in loaded_doc_ids
+                }
+            )
+
+        if book_result.chunks or literature_result.chunks:
             pdf_paths: list[Path] = []
         else:
             pdf_paths = sorted(self._data_root.glob("Дополнительные материалы/*.pdf"))
@@ -160,7 +189,7 @@ class KnowledgeBaseLoader:
                         BOOK_CHUNK_GRANULARITY,
                     )
                 ),
-                "books": book_result.books,
+                "books": books,
                 "passage_nodes": passage_result.passage_count,
                 "passage_topic_edges": passage_result.topic_edges,
                 "passage_sequence_edges": passage_result.sequence_edges,
