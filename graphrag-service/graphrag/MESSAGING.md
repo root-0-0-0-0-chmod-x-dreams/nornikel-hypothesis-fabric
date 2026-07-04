@@ -17,6 +17,7 @@ make rmq-query         # RPC smoke test
 
 | Очередь | Назначение | Тип сообщения |
 |---------|------------|---------------|
+| `chunks_text` | сырой MD → graph + Qdrant | `ingest.markdown` |
 | `chunks_text` | текстовый чанк → Qdrant | `chunk.upsert` |
 | `chunks_scheme` | caption схемы → Qdrant | `chunk.upsert` |
 | `graph_triplets` | S-P-O → граф | `graph.triplet` |

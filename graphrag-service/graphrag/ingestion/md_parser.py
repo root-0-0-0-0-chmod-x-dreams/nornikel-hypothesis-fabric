@@ -42,7 +42,10 @@ def parse_md_buckets(data_root: Path) -> MdParseResult:
 
 
 def parse_md_bucket_file(path: Path) -> _MdBucket | None:
-    raw = path.read_text(encoding="utf-8")
+    return parse_md_bucket_raw(path.read_text(encoding="utf-8"), source_label=str(path))
+
+
+def parse_md_bucket_raw(raw: str, *, source_label: str = "upload.md") -> _MdBucket | None:
     meta, body = split_frontmatter(raw)
 
     if not meta.get("factory") and meta.get("chunk_type") != "excel_bucket":
@@ -74,8 +77,8 @@ def parse_md_bucket_file(path: Path) -> _MdBucket | None:
             "metal": metal,
             "tonnes": round(tonnes, 2),
             "recoverable": recoverable,
-            "source_file": str(meta.get("source") or path.name),
-            "md_path": str(path),
+            "source_file": str(meta.get("source") or Path(source_label).name),
+            "md_path": source_label,
         },
     )
 
@@ -91,13 +94,13 @@ def parse_md_bucket_file(path: Path) -> _MdBucket | None:
         )
         if key in meta
     }
-    metadata["md_path"] = str(path)
+    metadata["md_path"] = source_label
 
     chunk = Chunk(
         chunk_id=chunk_id,
         text=body or _default_bucket_text(node.attributes),
         summary=str(meta.get("summary") or node.label),
-        source=str(meta.get("source") or path.name),
+        source=str(meta.get("source") or Path(source_label).name),
         factory=factory or None,
         chunk_type=str(meta.get("chunk_type") or "excel_bucket"),
         graph_node_ids=graph_node_ids,

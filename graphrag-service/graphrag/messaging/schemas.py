@@ -15,6 +15,7 @@ MSG_GRAPH_RAG_QUERY = "graph_rag.query"
 MSG_UNIFIED_QUERY = "graphrag.query"
 MSG_NL_CYPHER_QUERY = "nl_cypher.ask"
 MSG_EXTERNAL_INGEST = "external.ingest"
+MSG_INGEST_MARKDOWN = "ingest.markdown"
 MSG_INGEST_BOOTSTRAP = "ingest.bootstrap"
 
 

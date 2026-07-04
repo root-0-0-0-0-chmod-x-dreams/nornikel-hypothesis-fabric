@@ -21,6 +21,7 @@ from graphrag.messaging.schemas import (
     MSG_CHUNK_UPSERT,
     MSG_GRAPH_RAG_QUERY,
     MSG_INGEST_BOOTSTRAP,
+    MSG_INGEST_MARKDOWN,
     MSG_NL_CYPHER_QUERY,
     MSG_UNIFIED_QUERY,
     chunk_to_payload,
@@ -117,6 +118,38 @@ class GraphRagMessagingClient:
         return self._rpc(
             queue=QUEUE_GRAPH_RAG_QUERY,
             message_type=MSG_UNIFIED_QUERY,
+            payload=payload,
+            timeout=timeout,
+        )
+
+    def ingest_markdown(
+        self,
+        markdown: str,
+        *,
+        source_path: str | None = None,
+        source_url: str | None = None,
+        factory: str | None = None,
+        auto_link: bool = True,
+        timeout: float = 120.0,
+    ) -> dict[str, Any]:
+        """Ingest raw MD (YAML frontmatter + body) into graph + Qdrant."""
+        payload: dict[str, Any] = {
+            "markdown": markdown,
+            "auto_link": auto_link,
+        }
+
+        if source_path:
+            payload["source_path"] = source_path
+
+        if source_url:
+            payload["source_url"] = source_url
+
+        if factory:
+            payload["factory"] = factory
+
+        return self._rpc(
+            queue=QUEUE_CHUNKS_TEXT,
+            message_type=MSG_INGEST_MARKDOWN,
             payload=payload,
             timeout=timeout,
         )

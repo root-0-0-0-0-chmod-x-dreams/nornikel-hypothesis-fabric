@@ -47,14 +47,59 @@ def parse_md_books(data_root: Path) -> BookParseResult:
 
 
 def parse_md_book_chunk_file(path: Path, *, book_meta: dict | None = None) -> Chunk | None:
-    raw = path.read_text(encoding="utf-8")
+    return parse_md_book_chunk_raw(
+        path.read_text(encoding="utf-8"),
+        source_label=str(path),
+        book_meta=book_meta,
+    )
+
+
+def parse_md_book_raw(raw: str, *, source_label: str = "upload.md") -> list[Chunk]:
+    """Parse one MD document (single or multi-chunk) into book/general chunks."""
+    meta, body = split_frontmatter(raw)
+    book_meta = {
+        "doc_id": meta.get("doc_id") or Path(source_label).stem,
+        "title": meta.get("title") or Path(source_label).stem,
+        "source": meta.get("source") or Path(source_label).name,
+        **meta,
+    }
+
+    blocks = split_chunk_blocks(body)
+
+    if not blocks:
+        chunk = _chunk_from_parts(Path(source_label), book_meta, body)
+
+        return [chunk] if chunk else []
+
+    chunks: list[Chunk] = []
+
+    for index, (block_meta, text) in enumerate(blocks):
+        merged = {**book_meta, **block_meta}
+
+        if "chunk_index" not in merged:
+            merged["chunk_index"] = index
+
+        chunk = _chunk_from_parts(Path(source_label), merged, text, suffix=str(index))
+
+        if chunk is not None:
+            chunks.append(chunk)
+
+    return chunks
+
+
+def parse_md_book_chunk_raw(
+    raw: str,
+    *,
+    source_label: str = "upload.md",
+    book_meta: dict | None = None,
+) -> Chunk | None:
     meta, body = split_frontmatter(raw)
     merged = {**(book_meta or {}), **meta}
 
     if not body.strip():
         return None
 
-    return _chunk_from_parts(path, merged, body)
+    return _chunk_from_parts(Path(source_label), merged, body)
 
 
 def _parse_book_directory(book_dir: Path) -> list[Chunk]:

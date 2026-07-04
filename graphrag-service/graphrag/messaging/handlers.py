@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from graphrag.graph.base import GraphStoreProtocol
 from graphrag.ingestion.external_source import apply_external_ingest, ingest_external_source
+from graphrag.ingestion.md_ingest import apply_md_ingest, ingest_markdown_document
 from graphrag.ingestion.pipeline import load_knowledge_base
 from graphrag.messaging.schemas import (
     MSG_CHUNK_UPSERT,
@@ -14,6 +15,7 @@ from graphrag.messaging.schemas import (
     MSG_GRAPH_RAG_QUERY,
     MSG_GRAPH_TRIPLET,
     MSG_INGEST_BOOTSTRAP,
+    MSG_INGEST_MARKDOWN,
     MSG_NL_CYPHER_QUERY,
     MSG_UNIFIED_QUERY,
     Envelope,
@@ -74,6 +76,7 @@ class MessageHandler:
             MSG_UNIFIED_QUERY: self._handle_unified_query,
             MSG_NL_CYPHER_QUERY: self._handle_nl_cypher_query,
             MSG_EXTERNAL_INGEST: self._handle_external_ingest,
+            MSG_INGEST_MARKDOWN: self._handle_ingest_markdown,
             MSG_INGEST_BOOTSTRAP: self._handle_bootstrap,
         }
         handler = handlers.get(envelope.type)
@@ -148,6 +151,35 @@ class MessageHandler:
                 "cypher": answer.cypher,
                 "intent": answer.intent,
                 "rows": answer.rows,
+            }
+        )
+
+    def _handle_ingest_markdown(self, payload: dict) -> dict:
+        markdown = str(payload.get("markdown") or payload.get("content") or "").strip()
+
+        if not markdown:
+            return err_response("markdown is required")
+
+        result = ingest_markdown_document(
+            markdown,
+            source_path=payload.get("source_path") or payload.get("filename"),
+            source_url=payload.get("source_url"),
+            auto_link=bool(payload.get("auto_link", True)),
+            factory=payload.get("factory"),
+        )
+        apply_md_ingest(self._ctx.graph, self._ctx.vectors, result)
+        self._ctx.graph_rag = GraphRAGQueryService(self._ctx.graph, self._ctx.vectors)
+
+        chunk_types = sorted({chunk.chunk_type for chunk in result.chunks})
+
+        return ok_response(
+            {
+                "chunk_ids": result.chunk_ids,
+                "chunk_count": len(result.chunks),
+                "nodes_added": len(result.nodes),
+                "edges_added": len(result.edges),
+                "chunk_types": chunk_types,
+                "source_path": result.source_path,
             }
         )
 
