@@ -35,6 +35,22 @@ class Config:
         default_factory=lambda: os.getenv("LOG_LEVEL", "INFO")
     )
 
+    llm_service_url: str = field(
+        default_factory=lambda: os.getenv("LLM_SERVICE_URL", "http://llm-service:8000/api/v1")
+    )
+    vision_model: str = field(
+        default_factory=lambda: os.getenv("VISION_MODEL", "qwen3.6-35b-a3b")
+    )
+    vision_enabled: bool = field(
+        default_factory=lambda: os.getenv("VISION_ENABLED", "true").lower() == "true"
+    )
+    vision_max_retries: int = field(
+        default_factory=lambda: int(os.getenv("VISION_MAX_RETRIES", "3"))
+    )
+    vision_timeout: int = field(
+        default_factory=lambda: int(os.getenv("VISION_TIMEOUT", "180"))
+    )
+
     pdf_library: str = field(
         default_factory=lambda: os.getenv("PDF_LIBRARY", "opendataloader")
     )
