@@ -11,10 +11,16 @@ export interface ExpertSettings {
   temperature: number;
 }
 
-function buildSystemPrompt(docs: Document[]): string {
+function buildSystemPrompt(docs: Document[], settings: ExpertSettings): string {
   const parts = [
     "Ты — ИИ-ассистент «Фабрики гипотез» Норникеля.",
     "Твоя задача — анализировать предоставленные документы, генерировать проверяемые научные и инженерные гипотезы, ранжировать их по новизне, рискам и ожидаемой ценности.",
+    "",
+    `Сгенерируй ровно **${settings.hypothesisCount}** гипотез.`,
+    `Используй цикл проверки глубиной **${settings.agentCycleDepth}**: Generator → Actor ↔ Judge.`,
+    "Для каждой гипотезы укажи: формулировку, научное обоснование, механизм влияния, источники, новизну (high/medium/low), технические и экономические риски, ожидаемую ценность.",
+    "После списка гипотез добавь раздел «## Ранжирование» с распределением на Quick Wins и отклонённые.",
+    "",
     "Отвечай на русском языке. Используй Markdown для форматирования: заголовки ###, списки, **жирный**, код.",
   ];
 
@@ -36,7 +42,7 @@ export function useChat() {
   const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(
-    async (text: string, docs: Document[] = []) => {
+    async (text: string, docs: Document[] = [], settings: ExpertSettings = { hypothesisCount: 5, agentCycleDepth: 3, temperature: 0.7 }) => {
       const userMsg: ChatMessage = {
         id: generateId(),
         role: "user",
@@ -57,13 +63,14 @@ export function useChat() {
 
       try {
         abortRef.current = new AbortController();
-        const systemPrompt = buildSystemPrompt(docs);
+        const systemPrompt = buildSystemPrompt(docs, settings);
 
         const response = await fetch("/api/v1/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model: "yandexgpt",
+            temperature: settings.temperature,
             messages: [
               { role: "system", content: systemPrompt },
               ...messages.map((m) => ({ role: m.role, content: m.content })),
