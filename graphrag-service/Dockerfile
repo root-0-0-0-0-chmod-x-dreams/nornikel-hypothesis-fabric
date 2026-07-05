@@ -16,5 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY graphrag/ graphrag/
 COPY scripts/ scripts/
 COPY assets/ assets/
+COPY data/ data/
 
 CMD ["python3", "scripts/rmq_worker.py"]
