@@ -12,6 +12,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      "/api/v1/convert": {
+        target: "http://localhost:8001",
+        changeOrigin: true,
+      },
       "/api/v1/extract": {
         target: "http://localhost:8005",
         changeOrigin: true,

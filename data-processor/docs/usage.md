@@ -9,7 +9,9 @@ cd data-processor
 cp .env.example .env      # конфигурация по умолчанию готова к работе
 ```
 
-### 2. Запуск через Docker (рекомендуется)
+Отредактируй `.env` под свои нужды (см. [Конфигурация](#конфигурация-pdf-и-ocr)).
+
+### 2. Запуск через Docker
 
 ```bash
 docker compose up -d --build
@@ -21,29 +23,36 @@ docker compose up -d --build
 curl http://localhost:8001/api/v1/health
 ```
 
-### 3. Локальный запуск (для разработки)
+### 3. Локальный запуск
 
 ```bash
 python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
+venv\Scripts\activate              # Windows
+# source venv/bin/activate         # Linux/Mac
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
+**Для opendataloader** дополнительно нужна Java 21+. Установи с [Adoptium](https://adoptium.net/) или:
+
+```powershell
+# Windows: скачать и распаковать JDK 21 на диск D:
+# Скрипт установки прилагается:
+python install_jdk.py
+```
+
+**Для OCR** нужен EasyOCR и PyTorch (уже в `requirements.txt`). При первом запуске EasyOCR загрузит модели (~300 MB).
+
 ## API
 
-Базовый URL: `http://localhost:8001/api/v1`
-
+Базовый URL: `http://localhost:8001/api/v1`  
 Swagger: `http://localhost:8001/docs`
 
 ### `GET /health`
 
 ```bash
 curl http://localhost:8001/api/v1/health
-```
-
-```json
-{"status": "ok", "version": "1.0.0", "uptime_seconds": 42.1}
+# {"status":"ok","version":"1.0.0","uptime_seconds":42.1}
 ```
 
 ### `POST /convert`
@@ -51,8 +60,7 @@ curl http://localhost:8001/api/v1/health
 Конвертация одного файла. Тело — `multipart/form-data`, поле `file`.
 
 ```bash
-curl -X POST http://localhost:8001/api/v1/convert \
-  -F "file=@docs/report.pdf"
+curl -X POST http://localhost:8001/api/v1/convert -F "file=@report.pdf"
 ```
 
 Ответ:
@@ -62,132 +70,174 @@ curl -X POST http://localhost:8001/api/v1/convert \
   "success": true,
   "original_filename": "report.pdf",
   "file_type": "pdf",
-  "markdown_content": "# Report Title\n\n## Section 1\n...",
+  "markdown_content": "# Title\n\nParagraph text...\n\n![Figure 1](images/pdf_a1b2.jpeg)\n\n{OCR: Подпись к рисунку 1}\n",
   "images_extracted": 5,
   "errors": [],
   "warnings": [],
-  "metadata": {"pages": 12}
+  "metadata": {}
 }
 ```
 
 ### `POST /convert/batch`
 
-Пакетная конвертация до **50 файлов** за раз. Тело — `multipart/form-data`, поле `files` (множественное).
+Пакетная конвертация до **50 файлов** за раз.
 
 ```bash
 curl -X POST http://localhost:8001/api/v1/convert/batch \
   -F "files=@report.pdf" \
-  -F "files=@data.xlsx" \
-  -F "files=@diagram.png" \
-  -F "files=@notes.docx"
+  -F "files=@data.xlsx"
 ```
 
-Ответ:
+## Конфигурация PDF и OCR
 
-```json
-{
-  "total": 4,
-  "succeeded": 3,
-  "failed": 1,
-  "results": [
-    {
-      "success": true,
-      "original_filename": "report.pdf",
-      "file_type": "pdf",
-      "markdown_content": "...",
-      "images_extracted": 5,
-      "errors": [],
-      "warnings": [],
-      "metadata": {"pages": 12}
-    }
-  ]
-}
+Все настройки в `.env`:
+
+```ini
+# Выбор PDF-движка
+PDF_LIBRARY=opendataloader      # opendataloader | pymupdf
+PDF_IMAGE_OUTPUT=external       # off | external | embedded
+PDF_IMAGE_FORMAT=jpeg           # jpeg | png
+
+# OpenDataLoader Hybrid (опционально)
+PDF_HYBRID_ENABLED=false        # нужен сервер opendataloader-pdf-hybrid
+PDF_HYBRID_BACKEND=docling-fast
+PDF_HYBRID_URL=http://localhost:5002
+PDF_HYBRID_MODE=auto
+
+# OCR картинок
+OCR_ENABLED=false               # включить EasyOCR
+OCR_LANGUAGES=ru,en             # языки через запятую
+OCR_GPU_ENABLED=true            # GPU-ускорение (нужен CUDA)
 ```
 
-### `GET /convert/{filename}/raw`
+### Режимы PDF_IMAGE_OUTPUT
 
-Получить ранее сконвертированный результат в виде сырого markdown.
+| Режим | opendataloader | pymupdf | Результат |
+|-------|---------------|---------|-----------|
+| `off` | Только текст | Только текст | Нет картинок, максимальная скорость |
+| `external` | Картинки в файлах | Картинки в файлах | Файлы в `images/`, ссылки в markdown |
+| `embedded` | Base64 в markdown | не поддерживается | Тяжёлый markdown с base64-картинками |
+
+### Выбор PDF-движка
+
+| Критерий | opendataloader | pymupdf |
+|----------|---------------|---------|
+| Точность | #1 в бенчмарках (0.907) | Средняя |
+| Скорость | 0.02 сек/стр | ~0.01 сек/стр |
+| Таблицы | Отличное (0.928) | Базовое |
+| Зависимости | Java 21+ | Только Python |
+| Размер образа | ~2.5 GB | ~1 GB |
+| Reading order | XY-Cut++ | Постраничный |
+
+### OCR — как работает
+
+При `OCR_ENABLED=true` после каждой картинки в markdown добавляется блок с распознанным текстом:
+
+```markdown
+![Схема флотации](images/pdf_a1b2c3.jpeg)
+
+{OCR: Схема флотации руд цветных металлов с применением реагентов}
+```
+
+- **EasyOCR** запускается асинхронно для каждой картинки
+- Модели загружаются при первом использовании (ленивая инициализация)
+- **GPU**: при `OCR_GPU_ENABLED=true` использует CUDA/GPU (нужен PyTorch с CUDA)
+- **CPU**: при `false` работает на CPU (медленнее, но без GPU)
+
+### Установка EasyOCR вручную
 
 ```bash
-curl http://localhost:8001/api/v1/convert/report/raw
+pip install easyocr
+```
+
+Проверка:
+
+```python
+import easyocr
+reader = easyocr.Reader(['ru', 'en'], gpu=True)
+result = reader.readtext('test_image.png')
+print(result)
+```
+
+При первом запуске EasyOCR загрузит модели (~300 MB для ru+en) в кэш `~/.EasyOCR/model/`.
+
+## Hybrid-режим opendataloader (опционально)
+
+Для максимального качества на сложных PDF (скан-копии, формулы, сложные таблицы):
+
+```bash
+# Терминал 1 — hybrid-сервер
+pip install "opendataloader-pdf[hybrid]"
+opendataloader-pdf-hybrid --port 5002 --force-ocr --ocr-lang "ru,en"
+
+# Терминал 2 — в .env установить:
+# PDF_HYBRID_ENABLED=true
+# PDF_HYBRID_URL=http://localhost:5002
+```
+
+Или через Docker:
+
+```bash
+docker compose --profile hybrid up -d
+```
+
+## Установка Java 21 (для opendataloader)
+
+### Windows (установка на диск D:)
+
+```powershell
+python install_jdk.py
+```
+
+Скрипт скачает JDK 21 с GitHub, распакует на `D:\java\jdk-21` и установит `JAVA_HOME`.
+
+### Linux (Docker)
+
+Java 21 уже встроена в Docker-образ. Для локального запуска:
+
+```bash
+apt-get install -y openjdk-21-jre-headless
 ```
 
 ## Поддерживаемые форматы
 
 | Формат | Конвертер | Примечания |
 |--------|-----------|------------|
-| `.pdf` | docling → PyMuPDF (fallback) | Извлекаются текст и картинки |
+| `.pdf` | opendataloader / pymupdf | Выбор через PDF_LIBRARY |
 | `.docx` | docx2md | Таблицы, картинки из `word/media/` |
-| `.xlsx` | openpyxl + pandas | Все листы, таблицы markdown |
-| `.xls` | xls2xlsx → как .xlsx | Автоконвертация в .xlsx |
-| `.csv`, `.tsv` | pandas | Автоопределение разделителя |
-| `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.tiff`, `.webp` | Копирование в images/ | Markdown: `![](images/img_{uuid}.ext)` |
-| `.py`, `.js`, `.ts`, `.java`, `.go`, `.rs`, … | code block | Автоопределение языка (25+ языков) |
-| `.txt`, `.md`, `.yaml`, `.log`, `.cfg`, … | code block | Обёртка в ` ```text ``` ` |
-| `.json` | code block (pretty-print) | `json.dumps(indent=2)` |
-| `.html`, `.htm` | markdownify | heading_style=ATX |
-| `.exe`, `.dll`, `.zip`, `.mp4`, `.db`, … | **отказ** | Ошибка: тип не поддерживается |
+| `.xlsx` | openpyxl + pandas | Все листы |
+| `.xls` | xls2xlsx → .xlsx | Автоконвертация |
+| `.csv`, `.tsv` | pandas | Авто-разделитель |
+| `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.tiff`, `.webp` | Копия в images/ | UUID-имя |
+| `.py`, `.js`, `.ts`, … | code block | Авто-язык |
+| `.txt`, `.md`, `.yaml`, … | code block | ` ```text ``` ` |
+| `.json` | pretty-print | `json.dumps(indent=2)` |
+| `.html`, `.htm` | markdownify | ATX-headings |
+| `.exe`, `.zip`, `.mp4`, … | **отказ** | Бинарные не поддерживаются |
 
 ## Работа с картинками
 
-Все изображения (из PDF, DOCX, загруженные напрямую) сохраняются в общую папку `images/` с уникальными UUID-именами:
-
-```
-images/
-├── img_a1b2c3d4e5f6.png     # из image_converter
-├── pdf_f7e8d9c0b1a2.jpg     # из PDF (docling)
-├── docx_1234abcd5678.png    # из DOCX
-└── img_90998877aabb.png     # ещё одна картинка
-```
-
-- **При конвертации PDF**: docling создаёт временную папку с картинками (например, `uploads/report/`). `ImageManager` переносит их в общую `images/` с UUID-именами и переписывает все ссылки в markdown.
-- **При конвертации DOCX**: `ImageManager` извлекает картинки из `word/media/` внутри docx-архива.
-- **При конвертации изображений напрямую**: картинка копируется в `images/`, создаётся markdown-файл из одной ссылки.
+Все изображения сохраняются в `IMAGES_DIR` с UUID-именами. При OCR к ним добавляются текстовые описания.
 
 ## Коды ошибок
 
 | HTTP | Описание |
 |------|----------|
-| 400 | Не указано имя файла, batch > 50 файлов |
-| 413 | Файл превышает `MAX_FILE_SIZE_MB` (100 MB) |
+| 400 | Не указано имя файла, batch > 50 |
+| 413 | Файл > MAX_FILE_SIZE_MB |
 | 500 | Внутренняя ошибка конвертации |
 
-Поле `success: false` в ответе не вызывает HTTP-ошибку — оно позволяет обрабатывать частичные сбои в batch-режиме.
+## Логирование
 
-## Тонкие моменты
-
-### 1. docling и память
-
-docling загружает модели машинного обучения для парсинга PDF. Первый запуск может занять время на загрузку моделей (~500 MB). В Docker-образе зарезервировано `1G` памяти.
-
-### 2. CSV-разделители
-
-Сервис автоматически определяет разделитель по первой строке:
-- Если есть `\t` и нет `,` → табуляция
-- Если есть `;` и нет `,` → точка с запятой
-- Иначе → запятая
-
-### 3. Картинки из PDF
-
-Два пути извлечения:
-- **docling** (основной): качественное извлечение, создаёт папку с картинками
-- **PyMuPDF** (fallback): постраничное извлечение, если docling не установлен
-
-### 4. Логирование
-
-JSON-логи в stdout. Пример:
+JSON-логи в stdout:
 
 ```json
 {
-  "timestamp": "2026-07-03T21:00:00.123456+00:00",
+  "timestamp": "2026-07-04T18:00:00+00:00",
   "level": "INFO",
   "logger": "data_processor",
   "message": "converting_file",
-  "filename": "report.pdf",
-  "file_type": "pdf"
+  "original_filename": "report.pdf",
+  "detected_type": "pdf"
 }
 ```
-
-### 5. Очистка временных файлов
-
-Все загруженные файлы удаляются сразу после конвертации. Промежуточные папки (созданные docling для картинок) также удаляются.

@@ -35,6 +35,39 @@ class Config:
         default_factory=lambda: os.getenv("LOG_LEVEL", "INFO")
     )
 
+    pdf_library: str = field(
+        default_factory=lambda: os.getenv("PDF_LIBRARY", "opendataloader")
+    )
+    pdf_image_output: str = field(
+        default_factory=lambda: os.getenv("PDF_IMAGE_OUTPUT", "external")
+    )
+    pdf_image_format: str = field(
+        default_factory=lambda: os.getenv("PDF_IMAGE_FORMAT", "jpeg")
+    )
+
+    ocr_enabled: bool = field(
+        default_factory=lambda: os.getenv("OCR_ENABLED", "false").lower() == "true"
+    )
+    ocr_languages: str = field(
+        default_factory=lambda: os.getenv("OCR_LANGUAGES", "ru,en")
+    )
+    ocr_gpu_enabled: bool = field(
+        default_factory=lambda: os.getenv("OCR_GPU_ENABLED", "true").lower() == "true"
+    )
+
+    pdf_hybrid_enabled: bool = field(
+        default_factory=lambda: os.getenv("PDF_HYBRID_ENABLED", "false").lower() == "true"
+    )
+    pdf_hybrid_backend: str = field(
+        default_factory=lambda: os.getenv("PDF_HYBRID_BACKEND", "docling-fast")
+    )
+    pdf_hybrid_url: str = field(
+        default_factory=lambda: os.getenv("PDF_HYBRID_URL", "http://localhost:5002")
+    )
+    pdf_hybrid_mode: str = field(
+        default_factory=lambda: os.getenv("PDF_HYBRID_MODE", "auto")
+    )
+
     @property
     def max_file_size_bytes(self) -> int:
         return self.max_file_size_mb * 1024 * 1024

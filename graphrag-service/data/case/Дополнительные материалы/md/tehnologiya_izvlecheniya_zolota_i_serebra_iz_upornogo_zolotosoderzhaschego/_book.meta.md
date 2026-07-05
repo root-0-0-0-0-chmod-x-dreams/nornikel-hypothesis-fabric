@@ -1,0 +1,9 @@
+---
+doc_id: "tehnologiya_izvlecheniya_zolota_i_serebra_iz_upornogo_zolotosoderzhaschego"
+title: "tehnologiya_izvlecheniya_zolota_i_serebra_iz_upornogo_zolotosoderzhaschego"
+source: "tehnologiya_izvlecheniya_zolota_i_serebra_iz_upornogo_zolotosoderzhaschego.pdf"
+original_pdf: "tehnologiya_izvlecheniya_zolota_i_serebra_iz_upornogo_zolotosoderzhaschego.pdf"
+extractor: "opendataloader"
+granularity: "paragraph"
+---
+
