@@ -39,6 +39,8 @@ function buildSystemPrompt(docs: Document[], settings: ExpertSettings): string {
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [settings, setSettings] = useState<ExpertSettings>(DEFAULT_SETTINGS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(
@@ -77,10 +79,12 @@ export function useChat() {
               { role: "user", content: text },
             ],
           }),
-          signal: abortRef.current.signal,
+          signal,
         });
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (response.ok) {
+          const data = await response.json();
+          const reply = data.choices?.[0]?.message?.content || "";
 
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content || "Нет ответа от модели";
@@ -102,6 +106,14 @@ export function useChat() {
             ),
           );
         } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (err) {
+        if ((err as Error).name === "AbortError") {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: "Генерация остановлена.", isStreaming: false } : m)),
+          );
+        } else {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsg.id
@@ -115,12 +127,23 @@ export function useChat() {
         abortRef.current = null;
       }
     },
-    [messages],
+    [settings],
   );
 
   const stopGeneration = useCallback(() => {
     abortRef.current?.abort();
   }, []);
 
-  return { messages, isGenerating, sendMessage, stopGeneration };
+  return {
+    messages,
+    isGenerating,
+    sendMessage,
+    stopGeneration,
+    settings,
+    setSettings,
+    settingsOpen,
+    setSettingsOpen,
+    agentReasoning: AGENT_REASONING,
+    demoHypotheses: DEMO_HYPOTHESES,
+  };
 }
