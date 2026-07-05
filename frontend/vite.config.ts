@@ -20,6 +20,14 @@ export default defineConfig({
         target: "http://localhost:8005",
         changeOrigin: true,
       },
+      "/api/v1/convert": {
+        target: "http://localhost:8001",
+        changeOrigin: true,
+      },
+      "/api/v1/analyze": {
+        target: "http://localhost:8002",
+        changeOrigin: true,
+      },
       "/api": {
         target: "http://localhost:8000",
         changeOrigin: true,

@@ -107,6 +107,27 @@ async function extractUrl(url: string): Promise<ExtractedContent> {
   };
 }
 
+async function convertFile(file: File): Promise<{ markdown: string; metadata: Record<string, unknown> }> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("/api/v1/convert", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(err.detail || `Ошибка конвертации: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return {
+    markdown: data.markdown_content || "",
+    metadata: data.metadata || {},
+  };
+}
+
 export function useDocuments() {
   const [documents, setDocuments] = useState<Document[]>(() => loadDocs());
   const [uploading, setUploading] = useState(false);
@@ -154,7 +175,7 @@ export function useDocuments() {
     }
   }, []);
 
-  const addByFiles = useCallback((files: File[]) => {
+  const addByFiles = useCallback(async (files: File[]) => {
     setUploading(true);
     const newDocs: Document[] = files.map((file) => ({
       id: generateId(),
@@ -167,14 +188,53 @@ export function useDocuments() {
       status: "processing" as const,
     }));
     setDocuments((prev) => [...newDocs, ...prev]);
-    setTimeout(() => {
-      setDocuments((prev) =>
-        prev.map((d) =>
-          newDocs.some((nd) => nd.id === d.id) ? { ...d, status: "ready" as const } : d,
-        ),
-      );
-      setUploading(false);
-    }, 2000);
+
+    for (const doc of newDocs) {
+      const file = files.find((f) => f.name === doc.name && f.size === doc.size);
+      if (!file) continue;
+      try {
+        const result = await convertFile(file);
+        setDocuments((prev) =>
+          prev.map((d) =>
+            d.id === doc.id
+              ? {
+                  ...d,
+                  status: "ready" as const,
+                  extractedContent: {
+                    title: doc.name,
+                    markdown: result.markdown,
+                    text: result.markdown,
+                    excerpt: result.markdown.substring(0, 280),
+                    html: "",
+                    metadata: {
+                      title: doc.name,
+                      description: null,
+                      author: null,
+                      siteName: null,
+                      language: null,
+                      canonicalUrl: null,
+                    },
+                    statusCode: 200,
+                  },
+                }
+              : d,
+          ),
+        );
+      } catch (err) {
+        setDocuments((prev) =>
+          prev.map((d) =>
+            d.id === doc.id
+              ? {
+                  ...d,
+                  status: "error" as const,
+                  errorMessage: (err as Error).message || "Не удалось конвертировать файл",
+                }
+              : d,
+          ),
+        );
+      }
+    }
+    setUploading(false);
   }, []);
 
   const removeDocument = useCallback((id: string) => {

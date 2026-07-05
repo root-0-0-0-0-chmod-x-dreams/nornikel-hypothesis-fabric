@@ -122,6 +122,7 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onAddDocument={() => setUploadModalOpen(true)}
+        onSettingsClick={() => {}}
         sidebarContent={sidebarContent}
         detailContent={
           previewState ? (
