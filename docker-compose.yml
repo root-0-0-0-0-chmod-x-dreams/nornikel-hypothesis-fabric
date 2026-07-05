@@ -51,6 +51,49 @@ services:
           cpus: "0.5"
           memory: "256M"
 
+  data-processor:
+    build:
+      context: ./data-processor
+      dockerfile: Dockerfile
+      args:
+        INSTALL_JAVA: "${DP_JAVA:-true}"
+    container_name: data-processor
+    ports:
+      - "${DP_PORT:-8001}:8001"
+    env_file:
+      - ./data-processor/.env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8001
+      - IMAGES_DIR=/app/images
+      - UPLOADS_DIR=/app/uploads
+      - OUTPUT_DIR=/app/output
+      - PDF_HYBRID_URL=${DP_HYBRID_URL:-http://localhost:5002}
+    volumes:
+      - images_data:/app/images
+      - output_data:/app/output
+    restart: unless-stopped
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 50s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "4G"
+        reservations:
+          cpus: "0.5"
+          memory: "1G"
+
   manual-analysis:
     build:
       context: ./manual-analysis
@@ -107,3 +150,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  images_data:
+  output_data:
