@@ -1,0 +1,28 @@
+services:
+  hypothesis-factory:
+    build: .
+    container_name: hypothesis-factory
+    ports:
+      - "${PORT:-8003}:8003"
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8003
+      - REPORTS_DIR=/app/reports
+    volumes:
+      - reports_data:/app/reports
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  reports_data:
