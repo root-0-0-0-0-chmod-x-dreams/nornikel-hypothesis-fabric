@@ -5,6 +5,8 @@ export interface Hypothesis {
   rationale: string;
   sources: string[];
   novelty: "high" | "medium" | "low";
+  noveltyRationale?: string;
+  confidence?: number;
   risks: { technical: string; economic: string };
   expectedValue: string;
   mechanism: string;
@@ -30,7 +32,7 @@ export interface ExtractedContent {
 export interface Document {
   id: string;
   name: string;
-  type: "pdf" | "docx" | "xlsx" | "url" | "image" | "other";
+  type: "pdf" | "docx" | "xlsx" | "xls" | "csv" | "url" | "image" | "other";
   size?: number;
   url: string;
   blobUrl?: string;

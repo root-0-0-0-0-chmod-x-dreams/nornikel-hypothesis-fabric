@@ -1,4 +1,4 @@
-type BadgeVariant = "default" | "success" | "warning" | "danger" | "accent" | "info";
+export type BadgeVariant = "default" | "success" | "warning" | "danger" | "accent" | "info";
 
 interface BadgeProps {
   children: React.ReactNode;

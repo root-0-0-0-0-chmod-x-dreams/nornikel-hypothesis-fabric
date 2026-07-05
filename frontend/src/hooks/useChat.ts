@@ -1,52 +1,34 @@
 import { useState, useCallback, useRef } from "react";
-import type { ChatMessage, Hypothesis } from "@/types";
+import type { ChatMessage, Document } from "@/types";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10);
 }
 
-const DEMO_HYPOTHESES: Hypothesis[] = [
-  {
-    id: "h1",
-    title: "Добавка 0.3% Nb в сплав X при отжиге 950°C",
-    description:
-      "Микролегирование ниобием в количестве 0.3% при температуре отжига 950°C с выдержкой 2 часа позволит повысить жаропрочность сплава X за счёт формирования дисперсных карбидов NbC.",
-    rationale:
-      "Карбиды ниобия (NbC) обладают высокой термодинамической стабильностью и температура их растворения (~1100°C) значительно выше температуры эксплуатации сплава. Дисперсные частицы NbC размером 10–50 нм эффективно блокируют движение дислокаций и границ зёрен при высоких температурах.",
-    sources: [
-      "Патент RU 2 7XX XXX: «Жаропрочный сплав на основе никеля»",
-      "Smith et al., Materials Science and Engineering A, 2023",
-    ],
-    novelty: "high",
-    risks: {
-      technical: "Возможно образование грубых карбидов при отклонении режима отжига",
-      economic: "Стоимость Nb ~$45/кг, увеличение себестоимости сплава на ~2%",
-    },
-    expectedValue: "Повышение жаропрочности на 15–18% при сохранении пластичности >8%",
-    mechanism:
-      "Дисперсионное упрочнение за счёт выделения наноразмерных карбидов NbC по границам и в теле зёрен",
-  },
-  {
-    id: "h2",
-    title: "Замена части Ni на Fe в шихте с корректировкой режима ТО",
-    description:
-      "Снижение содержания никеля в сплаве Y на 5% с замещением железом и оптимизацией режима термической обработки позволит снизить себестоимость шихты без потери прочностных характеристик.",
-    rationale:
-      "Железо и никель образуют непрерывный ряд твёрдых растворов. При содержании Fe до 20% в никелевых сплавах сохраняется ГЦК-структура. Корректировка режима старения компенсирует снижение объёмной доли γ'-фазы.",
-    sources: [
-      "ГОСТ 5632-72: «Стали высоколегированные и сплавы коррозионностойкие»",
-      "Kozlov et al., Металловедение и термическая обработка металлов, 2024",
-    ],
-    novelty: "medium",
-    risks: {
-      technical: "Снижение коррозионной стойкости в агрессивных средах",
-      economic: "Экономия ~8% на стоимости шихты при текущих ценах на Ni",
-    },
-    expectedValue: "Снижение себестоимости шихты на 7–9% при сохранении σв > 1200 МПа",
-    mechanism:
-      "Твердорастворное упрочнение Fe-Ni матрицы с компенсацией за счёт оптимизации режима дисперсионного твердения",
-  },
-];
+export interface ExpertSettings {
+  hypothesisCount: number;
+  agentCycleDepth: number;
+  temperature: number;
+}
+
+function buildSystemPrompt(docs: Document[]): string {
+  const parts = [
+    "Ты — ИИ-ассистент «Фабрики гипотез» Норникеля.",
+    "Твоя задача — анализировать предоставленные документы, генерировать проверяемые научные и инженерные гипотезы, ранжировать их по новизне, рискам и ожидаемой ценности.",
+    "Отвечай на русском языке. Используй Markdown для форматирования: заголовки ###, списки, **жирный**, код.",
+  ];
+
+  const readyDocs = docs.filter((d) => d.status === "ready" && d.extractedContent?.markdown);
+  if (readyDocs.length > 0) {
+    parts.push("\n## Загруженные документы\n");
+    for (const doc of readyDocs) {
+      const content = doc.extractedContent!;
+      parts.push(`### ${doc.name}\n\n${content.markdown.substring(0, 8000)}\n`);
+    }
+  }
+
+  return parts.join("\n");
+}
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -54,7 +36,7 @@ export function useChat() {
   const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, docs: Document[] = []) => {
       const userMsg: ChatMessage = {
         id: generateId(),
         role: "user",
@@ -75,6 +57,7 @@ export function useChat() {
 
       try {
         abortRef.current = new AbortController();
+        const systemPrompt = buildSystemPrompt(docs);
 
         const response = await fetch("/api/v1/chat", {
           method: "POST",
@@ -82,11 +65,7 @@ export function useChat() {
           body: JSON.stringify({
             model: "yandexgpt",
             messages: [
-              {
-                role: "system",
-                content:
-                  "Ты — ИИ-ассистент «Фабрики гипотез» Норникеля. Твоя задача — генерировать проверяемые научные гипотезы, анализировать материалы и помогать исследователям. Отвечай на русском языке, подробно и по делу.",
-              },
+              { role: "system", content: systemPrompt },
               ...messages.map((m) => ({ role: m.role, content: m.content })),
               { role: "user", content: text },
             ],
@@ -102,7 +81,7 @@ export function useChat() {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsg.id
-              ? { ...m, content, isStreaming: false, hypotheses: DEMO_HYPOTHESES }
+              ? { ...m, content, isStreaming: false }
               : m,
           ),
         );
@@ -111,7 +90,7 @@ export function useChat() {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsg.id
-                ? { ...m, content: "Генерация остановлена.", isStreaming: false }
+                ? { ...m, content: "_Генерация остановлена._", isStreaming: false }
                 : m,
             ),
           );
@@ -119,7 +98,7 @@ export function useChat() {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsg.id
-                ? { ...m, content: `Ошибка: ${(err as Error).message}. Проверьте, запущен ли llm-service.`, isStreaming: false }
+                ? { ...m, content: `**Ошибка:** ${(err as Error).message}. Проверьте, запущен ли llm-service.`, isStreaming: false }
                 : m,
             ),
           );

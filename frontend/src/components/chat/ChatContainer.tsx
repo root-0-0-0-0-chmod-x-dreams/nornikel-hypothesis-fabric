@@ -2,6 +2,8 @@ import { useEffect, useRef, type ReactNode } from "react";
 import type { ChatMessage as ChatMessageType } from "@/types";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
+import type { AgentNodeData } from "./AgentNode";
+import { GenerationOverlay } from "./GenerationOverlay";
 
 interface ChatContainerProps {
   messages: ChatMessageType[];
@@ -9,6 +11,12 @@ interface ChatContainerProps {
   onAttach: () => void;
   disabled?: boolean;
   emptyState?: ReactNode;
+  generationPhase?: "retrieve" | "generate" | "validate" | "done";
+  generationNodes?: AgentNodeData[];
+  generationProgress?: number;
+  hypothesisCount?: number;
+  cycleDepth?: number;
+  onSourceClick?: (source: string) => void;
 }
 
 export function ChatContainer({
@@ -17,12 +25,18 @@ export function ChatContainer({
   onAttach,
   disabled = false,
   emptyState,
+  generationPhase,
+  generationNodes = [],
+  generationProgress = 0,
+  hypothesisCount = 5,
+  cycleDepth = 3,
+  onSourceClick,
 }: ChatContainerProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, generationNodes]);
 
   return (
     <div className="flex flex-col h-full">
@@ -32,12 +46,23 @@ export function ChatContainer({
         ) : (
           <div className="flex flex-col gap-6 max-w-3xl mx-auto">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} message={msg} />
+              <ChatMessage key={msg.id} message={msg} onSourceClick={onSourceClick} />
             ))}
           </div>
         )}
         <div ref={bottomRef} />
       </div>
+
+      {generationPhase && (
+        <GenerationOverlay
+          phase={generationPhase}
+          nodes={generationNodes}
+          progress={generationProgress}
+          hypothesisCount={hypothesisCount}
+          cycleDepth={cycleDepth}
+        />
+      )}
+
       <ChatInput onSend={onSend} onAttach={onAttach} disabled={disabled} />
     </div>
   );

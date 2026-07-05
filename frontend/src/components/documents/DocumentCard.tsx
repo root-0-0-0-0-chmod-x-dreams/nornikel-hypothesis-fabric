@@ -14,6 +14,8 @@ const iconMap = {
   pdf: FileText,
   docx: FileText,
   xlsx: FileSpreadsheet,
+  xls: FileSpreadsheet,
+  csv: FileSpreadsheet,
   url: Globe,
   image: Image,
   other: FileText,
