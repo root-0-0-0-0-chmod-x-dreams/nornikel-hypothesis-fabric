@@ -142,7 +142,7 @@ export default function App() {
       >
         <ChatContainer
           messages={messages}
-          onSend={(text) => sendMessage(text, documents)}
+          onSend={(text) => sendMessage(text, documents, settings)}
           onAttach={() => setUploadModalOpen(true)}
           disabled={isGenerating}
           emptyState={<EmptyChatState onSuggestion={sendMessage} />}
