@@ -5,6 +5,8 @@ export interface Hypothesis {
   rationale: string;
   sources: string[];
   novelty: "high" | "medium" | "low";
+  noveltyRationale?: string;
+  confidence?: number;
   risks: { technical: string; economic: string };
   expectedValue: string;
   mechanism: string;
