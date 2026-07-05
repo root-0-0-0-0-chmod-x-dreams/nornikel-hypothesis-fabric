@@ -2,26 +2,13 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { ChatContainer } from "@/components/chat";
 import { DocumentList, DocumentPreview, DocumentUploadModal } from "@/components/documents";
-import { RoadmapView } from "@/components/roadmap";
 import { useChat, useDocuments } from "@/hooks";
 import { AttentionView, ExpertSettingsModal } from "@/components/ui";
 import type { ExpertSettings } from "@/hooks/useChat";
-import { Lightbulb, MessageSquare, TrendingUp, Sparkles, Shield, FlaskConical } from "lucide-react";
-import type { Document, Roadmap } from "@/types";
-
-const DEMO_ROADMAP: Roadmap = {
-  id: "r1",
-  hypothesisId: "h1: Добавка 0.3% Nb в сплав X",
-  totalDuration: "6–8 недель",
-  totalResources: "Плавильная печь, разрывная машина, металлографический микроскоп, 50 кг шихты",
-  steps: [
-    { id: "s1", order: 1, title: "Выплавка опытных образцов", description: "Выплавка 3 плавок сплава X с содержанием Nb 0.1%, 0.3%, 0.5% в вакуумной индукционной печи", resources: "Вакуумная индукционная печь, шихтовые материалы, 2 смены", duration: "1 неделя", successCriteria: "Получены слитки без видимых дефектов, химсостав в допуске ±0.02%", failureCriteria: "Отклонение химсостава >0.05%", status: "pending" },
-    { id: "s2", order: 2, title: "Термическая обработка", description: "Отжиг при 950°C / 2 ч с закалкой в масло, старение при 750°C / 16 ч", resources: "Камерная печь с защитной атмосферой, закалочный бак", duration: "2 недели", successCriteria: "Твёрдость 38–42 HRC", failureCriteria: "Разброс твёрдости >3 HRC", status: "pending" },
-    { id: "s3", order: 3, title: "Механические испытания при 800°C", description: "Испытания на длительную прочность при 800°C / 200 МПа", resources: "Разрывная машина, 9 образцов", duration: "2 недели", successCriteria: "Повышение времени до разрушения >12%", failureCriteria: "Разрушение ранее 100 ч", status: "pending" },
-    { id: "s4", order: 4, title: "Микроструктурный анализ", description: "ПЭМ и РЭМ анализ карбидов NbC", resources: "ПЭМ, РЭМ, 6 шлифов", duration: "1–2 недели", successCriteria: "Размер карбидов 10–50 нм", failureCriteria: "Карбиды >200 нм", status: "pending" },
-    { id: "s5", order: 5, title: "Анализ и отчёт", description: "Статистический анализ, подготовка отчёта", resources: "Аналитик, 1 неделя", duration: "1 неделя", successCriteria: "Отчёт по ГОСТ 7.32", failureCriteria: "p > 0.05", status: "pending" },
-  ],
-};
+import { Lightbulb, MessageSquare, TrendingUp, Sparkles, Shield, FlaskConical, Map } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { Document } from "@/types";
 
 const SUGGESTIONS = [
   { icon: TrendingUp, color: "accent" as const, text: "Повысить жаропрочность сплава на 15%" },
@@ -81,6 +68,8 @@ export default function App() {
   const [settings, setSettings] = useState<ExpertSettings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
+
   const sidebarContent = (() => {
     switch (activeTab) {
       case "chat":
@@ -88,7 +77,7 @@ export default function App() {
           <AttentionView
             icon={<MessageSquare size={24} />}
             title="Диалог"
-            description="Документы, добавленные в диалог, появятся здесь. Перейдите во вкладку «Документы» для управления файлами."
+            description="Документы, добавленные в диалог, появятся здесь."
             variant="gray"
             size="sm"
             className="py-6"
@@ -105,16 +94,31 @@ export default function App() {
           />
         );
       case "roadmap":
-        return (
+        return lastAssistantMsg?.content ? (
           <div className="flex flex-col gap-3">
             <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider px-1">
-              Гипотеза
+              Результат генерации
             </h3>
-            <p className="text-sm text-text leading-relaxed px-1">
-              Добавка 0.3% Nb в сплав X при отжиге 950°C
-            </p>
-            <RoadmapView roadmap={DEMO_ROADMAP} />
+            <div className="prose prose-sm max-w-none dark:prose-invert
+              prose-headings:text-text prose-p:text-text prose-li:text-text
+              prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-xs
+              prose-code:before:content-none prose-code:after:content-none
+              prose-pre:bg-gray-100 prose-pre:rounded-xl prose-pre:border prose-pre:border-border
+              dark:prose-code:bg-gray-800/50 dark:prose-pre:bg-gray-800/50">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {lastAssistantMsg.content}
+              </ReactMarkdown>
+            </div>
           </div>
+        ) : (
+          <AttentionView
+            icon={<Map size={24} />}
+            title="Роадмапа"
+            description="Отправьте запрос — результат генерации появится здесь."
+            variant="gray"
+            size="sm"
+            className="py-6"
+          />
         );
       default:
         return null;
@@ -142,10 +146,10 @@ export default function App() {
       >
         <ChatContainer
           messages={messages}
-          onSend={(text) => sendMessage(text, documents, settings)}
+          onSend={(text) => sendMessage(text, undefined, settings)}
           onAttach={() => setUploadModalOpen(true)}
           disabled={isGenerating}
-          emptyState={<EmptyChatState onSuggestion={sendMessage} />}
+          emptyState={<EmptyChatState onSuggestion={(text) => sendMessage(text)} />}
         />
       </AppLayout>
 
