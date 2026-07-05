@@ -8,6 +8,7 @@ from pathlib import Path
 from graphrag.ingestion.md_book_parser import parse_md_book_raw
 from graphrag.ingestion.md_frontmatter import split_frontmatter
 from graphrag.ingestion.md_parser import parse_md_bucket_raw
+from graphrag.ingestion.paths import resolve_data_root
 from graphrag.ingestion.passage_wiring import wire_passages_incremental
 from graphrag.ingestion.pdf_graph_linker import link_pdf_chunks_to_graph
 from graphrag.models import Chunk, GraphEdge, GraphNode
@@ -53,7 +54,13 @@ def ingest_markdown_document(
         edges.extend(bucket.edges)
         chunks.append(bucket.chunk)
     else:
-        chunks.extend(parse_md_book_raw(raw, source_label=label))
+        chunks.extend(
+            parse_md_book_raw(
+                raw,
+                source_label=label,
+                data_root=resolve_data_root(),
+            )
+        )
 
     if not chunks:
         raise ValueError("no chunks parsed from markdown; check frontmatter")

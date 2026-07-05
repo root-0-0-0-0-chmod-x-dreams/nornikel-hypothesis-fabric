@@ -35,6 +35,7 @@ from graphrag.ingestion.paths import (
     resolve_literature_root,
 )
 from graphrag.ingestion.pdf_parser import parse_pdf_file
+from graphrag.ingestion.scheme_md_parser import parse_scheme_regulation_md, scheme_md_stems
 from graphrag.ingestion.schemes import parse_image_files
 from graphrag.constants import BOOK_CHUNK_GRANULARITY
 from graphrag.models import Chunk, GraphEdge, GraphNode
@@ -135,11 +136,17 @@ class KnowledgeBaseLoader:
         for pdf_path in pdf_paths:
             chunks.extend(parse_pdf_file(pdf_path))
 
+        scheme_md_chunks = parse_scheme_regulation_md(self._data_root)
+        chunks.extend(scheme_md_chunks)
+        md_stems = scheme_md_stems(self._data_root)
+
         scheme_paths = sorted(self._data_root.glob("Схемы флотации/*.png"))
         scheme_paths += sorted(self._data_root.glob("Схемы флотации/*.PNG"))
+        scheme_paths = [path for path in scheme_paths if path.stem not in md_stems]
         chunks.extend(parse_image_files(scheme_paths))
 
         regulation_paths = sorted(self._data_root.glob("Регламенты/*.png"))
+        regulation_paths = [path for path in regulation_paths if path.stem not in md_stems]
         chunks.extend(parse_image_files(regulation_paths))
 
         nodes_by_id = {node.node_id: node for node in nodes}

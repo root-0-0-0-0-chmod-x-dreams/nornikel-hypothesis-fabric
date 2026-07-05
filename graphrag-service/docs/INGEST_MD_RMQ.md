@@ -203,14 +203,56 @@ Data-processor **лучше** всегда добавлять frontmatter (хо�
 
 ---
 
+### Тип 4 — иллюстрация (PNG/JPG) → `md_image`
+
+**Один чанк = одна ссылка на картинку** в body. Файлы лежат отдельно от MD (папка `images/` или `Схемы флотации/`).
+
+```markdown
+---
+doc_id: glemb_flotation
+source: Глембоцкий-Классен.pdf
+title: Флотационные методы обогащения
+original_format: pdf
+page: 37
+chunk_type: md_image
+chunk_id: book_glemb_flotation_p037_image_001
+summary: Схема флотационной линии
+factory: КГМК
+---
+
+![Схема флотационной линии](../images/glemb_flotation/p037_scheme.png)
+```
+
+| Правило | Детали |
+|---------|--------|
+| Body | **Только** `![alt](path)` — одна ссылка, без текста вокруг |
+| `summary` / alt | Текст для embedding (caption); если нет — берётся alt |
+| `path` | Относительный от MD или имя файла; резолв в `Дополнительные материалы/images/`, `Схемы флотации/`, `Регламенты/` |
+| Хранение | Байты PNG **не** в Qdrant — только `image_path`, `image_rel_path` в metadata |
+| Смешанный чанк | Текст + картинка в одном файле → текстовый `book_text`, markdown-ссылка вырезается из body |
+
+Авто-детект: если body — только `![…](…)`, тип `md_image` ставится даже без `chunk_type` в frontmatter.
+
+**Layout данных:**
+
+```
+data/case/Дополнительные материалы/
+  md/<book>/p037_image_001.md
+  images/<book>/p037_scheme.png    # рекомендуемый путь для chunker
+data/case/Схемы флотации/*.png      # legacy / общие схемы
+```
+
+---
+
 ## Что делает GraphRAG после приёма
 
 1. Парсит frontmatter + body (`md_ingest.py`)
 2. `excel_bucket` → узел LossForm + ABC edges
 3. `book_text` / прочее → чанки без LossForm node
-4. `auto_link: true` → keyword match → `graph_node_ids`, `EVIDENCED_BY`
-5. `upsert` в Qdrant (dense + BM25)
-6. `wire_passages_incremental` — passage nodes в графе
+4. `md_image` → чанк с caption + путь к файлу; узел Source + `EVIDENCED_BY` (как `scheme_caption`)
+5. `auto_link: true` → keyword match → `graph_node_ids`, `EVIDENCED_BY`
+6. `upsert` в Qdrant (dense + BM25)
+7. `wire_passages_incremental` — passage nodes в графе
 
 После ingest документ **сразу** участвует в `graphrag.query`.
 
@@ -230,6 +272,7 @@ Data-processor **лучше** всегда добавлять frontmatter (хо�
 
 **data-processor** отдаёт plain MD — **chunker обязан**:
 - порезать на абзацы/секции;
+- **картинки — отдельные MD-файлы** с одной ссылкой `![alt](path)`, файлы в `images/`;
 - добавить YAML (`source`, `page`, `original_format`, …);
 - слать `ingest.markdown` **по файлу** или **по чанку**.
 
@@ -286,5 +329,5 @@ client.graphrag_query(question="...", hypotheses=[...])
 ## Тесты
 
 ```bash
-pytest tests/test_md_ingest.py -q
+pytest tests/test_md_ingest.py tests/test_md_image_refs.py -q
 ```

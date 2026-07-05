@@ -7,9 +7,15 @@ from pathlib import Path
 from graphrag.models import Chunk
 
 SCHEME_NODE_HINTS: dict[str, list[str]] = {
+    "Схема 1": ["process_comminution"],
+    "Схема 2": ["process_comminution"],
+    "Схема 3": ["process_flotation"],
+    "Схема 4": ["process_flotation"],
     "Схема 5": ["equip_mshr", "equip_mshc", "equip_gc660", "process_comminution"],
     "Схема 6": ["equip_fpm", "process_flotation"],
-    "Схема 3": ["process_flotation"],
+    "Схема 7": ["process_flotation"],
+    "Схема 8": ["process_flotation"],
+    "Схема флотации": ["equip_fpm", "process_flotation"],
     "Регламент 1": ["equip_fpm", "process_flotation"],
 }
 

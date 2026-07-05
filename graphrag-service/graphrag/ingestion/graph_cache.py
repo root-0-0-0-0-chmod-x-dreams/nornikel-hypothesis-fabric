@@ -41,7 +41,15 @@ def use_graph_cache() -> bool:
 def data_fingerprint(data_root: Path) -> str:
     parts: list[str] = [str(data_root.resolve())]
 
-    for pattern in ("Пример */*.xlsx", "Дополнительные материалы/md/*/_book.meta.md"):
+    for pattern in (
+        "Пример */*.xlsx",
+        "Дополнительные материалы/md/*/_book.meta.md",
+        "Дополнительные материалы/images/**/*",
+        "Схемы флотации/*.png",
+        "Схемы флотации/*.md",
+        "Регламенты/*.png",
+        "Регламенты/*.md",
+    ):
         for path in sorted(data_root.glob(pattern)):
             stat = path.stat()
             parts.append(f"{path.relative_to(data_root)}:{stat.st_mtime_ns}:{stat.st_size}")

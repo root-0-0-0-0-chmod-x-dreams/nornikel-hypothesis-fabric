@@ -125,13 +125,13 @@ def enrich_graph(
         )
 
     for chunk in chunks:
-        if chunk.chunk_type != "scheme_caption":
+        if chunk.chunk_type not in {"scheme_caption", "md_image"}:
             continue
 
         source_id = _ensure_source(
             nodes_by_id,
             chunk.source,
-            source_type="scheme",
+            source_type="scheme" if chunk.chunk_type == "scheme_caption" else "image",
             image_path=chunk.metadata.get("image_path"),
         )
         for node_id in chunk.graph_node_ids:

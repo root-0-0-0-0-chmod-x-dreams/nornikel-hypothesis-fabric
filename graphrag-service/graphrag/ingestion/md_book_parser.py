@@ -7,6 +7,8 @@ from pathlib import Path
 
 from graphrag.ingestion.excel_parser import _slugify
 from graphrag.ingestion.md_frontmatter import split_chunk_blocks, split_frontmatter
+from graphrag.ingestion.md_image_chunks import image_ref_to_chunk
+from graphrag.ingestion.md_image_refs import primary_image_ref, strip_image_markdown
 from graphrag.models import Chunk
 
 BOOK_MD_ROOT = "Дополнительные материалы/md"
@@ -30,7 +32,7 @@ def parse_md_books(data_root: Path) -> BookParseResult:
     books: list[str] = []
 
     for book_dir in sorted(path for path in books_root.iterdir() if path.is_dir()):
-        book_chunks = _parse_book_directory(book_dir)
+        book_chunks = _parse_book_directory(book_dir, data_root=data_root)
         chunks.extend(book_chunks)
 
         if book_chunks:
@@ -40,21 +42,22 @@ def parse_md_books(data_root: Path) -> BookParseResult:
         if book_file.name.startswith("_"):
             continue
 
-        chunks.extend(_parse_multi_chunk_book_file(book_file))
+        chunks.extend(_parse_multi_chunk_book_file(book_file, data_root=data_root))
         books.append(book_file.stem)
 
     return BookParseResult(chunks=chunks, books=sorted(set(books)))
 
 
-def parse_md_book_chunk_file(path: Path, *, book_meta: dict | None = None) -> Chunk | None:
+def parse_md_book_chunk_file(path: Path, *, book_meta: dict | None = None, data_root: Path | None = None) -> Chunk | None:
     return parse_md_book_chunk_raw(
         path.read_text(encoding="utf-8"),
         source_label=str(path),
         book_meta=book_meta,
+        data_root=data_root,
     )
 
 
-def parse_md_book_raw(raw: str, *, source_label: str = "upload.md") -> list[Chunk]:
+def parse_md_book_raw(raw: str, *, source_label: str = "upload.md", data_root: Path | None = None) -> list[Chunk]:
     """Parse one MD document (single or multi-chunk) into book/general chunks."""
     meta, body = split_frontmatter(raw)
     book_meta = {
@@ -63,11 +66,12 @@ def parse_md_book_raw(raw: str, *, source_label: str = "upload.md") -> list[Chun
         "source": meta.get("source") or Path(source_label).name,
         **meta,
     }
+    source_path = Path(source_label)
 
     blocks = split_chunk_blocks(body)
 
     if not blocks:
-        chunk = _chunk_from_parts(Path(source_label), book_meta, body)
+        chunk = _chunk_from_parts(source_path, book_meta, body, data_root=data_root)
 
         return [chunk] if chunk else []
 
@@ -79,7 +83,13 @@ def parse_md_book_raw(raw: str, *, source_label: str = "upload.md") -> list[Chun
         if "chunk_index" not in merged:
             merged["chunk_index"] = index
 
-        chunk = _chunk_from_parts(Path(source_label), merged, text, suffix=str(index))
+        chunk = _chunk_from_parts(
+            source_path,
+            merged,
+            text,
+            suffix=str(index),
+            data_root=data_root,
+        )
 
         if chunk is not None:
             chunks.append(chunk)
@@ -92,6 +102,7 @@ def parse_md_book_chunk_raw(
     *,
     source_label: str = "upload.md",
     book_meta: dict | None = None,
+    data_root: Path | None = None,
 ) -> Chunk | None:
     meta, body = split_frontmatter(raw)
     merged = {**(book_meta or {}), **meta}
@@ -99,10 +110,10 @@ def parse_md_book_chunk_raw(
     if not body.strip():
         return None
 
-    return _chunk_from_parts(Path(source_label), merged, body)
+    return _chunk_from_parts(Path(source_label), merged, body, data_root=data_root)
 
 
-def _parse_book_directory(book_dir: Path) -> list[Chunk]:
+def _parse_book_directory(book_dir: Path, *, data_root: Path | None = None) -> list[Chunk]:
     book_meta_path = book_dir / "_book.meta.md"
 
     if book_meta_path.is_file():
@@ -116,7 +127,7 @@ def _parse_book_directory(book_dir: Path) -> list[Chunk]:
         if path.name.startswith("_"):
             continue
 
-        chunk = parse_md_book_chunk_file(path, book_meta=book_meta)
+        chunk = parse_md_book_chunk_file(path, book_meta=book_meta, data_root=data_root)
 
         if chunk is not None:
             chunks.append(chunk)
@@ -124,7 +135,7 @@ def _parse_book_directory(book_dir: Path) -> list[Chunk]:
     return chunks
 
 
-def _parse_multi_chunk_book_file(path: Path) -> list[Chunk]:
+def _parse_multi_chunk_book_file(path: Path, *, data_root: Path | None = None) -> list[Chunk]:
     raw = path.read_text(encoding="utf-8")
     book_meta, body = split_frontmatter(raw)
     book_meta.setdefault("doc_id", path.stem)
@@ -134,7 +145,7 @@ def _parse_multi_chunk_book_file(path: Path) -> list[Chunk]:
     blocks = split_chunk_blocks(body)
 
     if not blocks:
-        chunk = _chunk_from_parts(path, book_meta, body)
+        chunk = _chunk_from_parts(path, book_meta, body, data_root=data_root)
 
         return [chunk] if chunk else []
 
@@ -146,7 +157,7 @@ def _parse_multi_chunk_book_file(path: Path) -> list[Chunk]:
         if "chunk_index" not in merged:
             merged["chunk_index"] = index
 
-        chunk = _chunk_from_parts(path, merged, text, suffix=str(index))
+        chunk = _chunk_from_parts(path, merged, text, suffix=str(index), data_root=data_root)
 
         if chunk is not None:
             chunks.append(chunk)
@@ -160,8 +171,29 @@ def _chunk_from_parts(
     body: str,
     *,
     suffix: str | None = None,
+    data_root: Path | None = None,
 ) -> Chunk | None:
     text = body.strip()
+
+    if not text:
+        return None
+
+    chunk_type = str(meta.get("chunk_type") or "")
+    image_ref = primary_image_ref(text)
+
+    if chunk_type in {"md_image", "image", "scheme_caption"} or image_ref is not None:
+        if image_ref is None:
+            return None
+
+        return image_ref_to_chunk(
+            meta,
+            path,
+            image_ref,
+            data_root=data_root,
+            suffix=suffix,
+        )
+
+    text = strip_image_markdown(text)
 
     if not text:
         return None

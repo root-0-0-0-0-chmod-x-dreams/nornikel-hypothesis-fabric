@@ -1,6 +1,7 @@
 .PHONY: install test demo bootstrap lint format infra-up neo4j-seed neo4j-check qdrant-check ask-graph rmq-worker rmq-query gradio-studio excel-to-md pdf-to-md graph-html graph-view sync-data
 
 CASE_SRC ?= $(CURDIR)/../../Задача 1. Фабрика гипотез/Задача 1
+PICS_MD ?= $(CURDIR)/../../pics-to-md
 DATA_CASE := $(CURDIR)/data/case
 DATA_LIT := $(CURDIR)/data/literature
 
@@ -16,7 +17,15 @@ sync-data:
 	rsync -a "$(CASE_SRC)/Пример 1/" "$(CASE_SRC)/Пример 2/" "$(CASE_SRC)/Пример 3/" "$(CASE_SRC)/Пример 4/" "$(DATA_CASE)/"
 	rsync -a "$(CASE_SRC)/Дополнительные материалы/md/geokniga_"* "$(CASE_SRC)/Дополнительные материалы/md/tehnologiya_"* "$(DATA_CASE)/Дополнительные материалы/md/"
 	rsync -a "$(CASE_SRC)/Дополнительные материалы/md/md/" "$(DATA_LIT)/"
+	@if [ -d "$(CASE_SRC)/Дополнительные материалы/images" ]; then rsync -a "$(CASE_SRC)/Дополнительные материалы/images/" "$(DATA_CASE)/Дополнительные материалы/images/"; fi
+	@if [ -d "$(CASE_SRC)/Схемы флотации" ]; then rsync -a "$(CASE_SRC)/Схемы флотации/" "$(DATA_CASE)/Схемы флотации/"; fi
+	@if [ -d "$(CASE_SRC)/Регламенты" ]; then rsync -a "$(CASE_SRC)/Регламенты/" "$(DATA_CASE)/Регламенты/"; fi
+	@$(MAKE) sync-scheme-md
 	@echo "Synced case + literature → data/"
+
+sync-scheme-md:
+	@test -d "$(PICS_MD)" || (echo "PICS_MD not found: $(PICS_MD)" && exit 1)
+	python3 scripts/deploy_scheme_md.py "$(PICS_MD)" "$(DATA_CASE)"
 
 literature-chunks:
 	python3 scripts/monolithic_to_chunks.py
