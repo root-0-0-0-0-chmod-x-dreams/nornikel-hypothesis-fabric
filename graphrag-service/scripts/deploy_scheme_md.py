@@ -40,13 +40,11 @@ def _graph_nodes_hint(stem: str, kind: str) -> list[str]:
     return []
 
 
-def _normalize_body(body: str, png_name: str) -> str:
-    def repl(match: re.Match[str]) -> str:
-        alt = match.group(1).strip() or Path(png_name).stem
+def _normalize_body(body: str, stem: str, png_name: str) -> str:
+    def repl(_match: re.Match[str]) -> str:
+        return f"![{stem}](./{png_name})"
 
-        return f"![{alt}]({png_name})"
-
-    return IMAGE_MD_RE.sub(repl, body.strip())
+    return IMAGE_MD_RE.sub(repl, body.strip(), count=1)
 
 
 def _build_frontmatter(stem: str, kind: str) -> str:
@@ -89,7 +87,7 @@ def deploy_file(src: Path, data_case: Path) -> Path:
     _meta, body = split_frontmatter(raw)
     stem = src.stem
     png_name = f"{stem}.png"
-    normalized_body = _normalize_body(body, png_name)
+    normalized_body = _normalize_body(body, stem, png_name)
     output = f"{_build_frontmatter(stem, kind)}{normalized_body}\n"
 
     target = target_dir / src.name
