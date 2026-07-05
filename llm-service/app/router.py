@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import base64
 import time
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
 from .config import get_config
@@ -32,7 +34,7 @@ async def health():
     cfg = get_config()
     return HealthResponse(
         status="ok",
-        version="1.0.0",
+        version="1.1.0",
         uptime_seconds=round(time.monotonic() - _start_time, 1),
         models_count=len(mm._models),
         yandex_configured=cfg.is_configured,
@@ -70,11 +72,25 @@ async def queue_status():
     )
 
 
+def _serialize_content(content) -> str | list:
+    if isinstance(content, str):
+        return content
+    parts = []
+    for part in content:
+        d = {"type": part.type}
+        if part.type == "text":
+            d["text"] = part.text
+        elif part.type == "image_url" and part.image_url:
+            d["image_url"] = {"url": part.image_url.url}
+        parts.append(d)
+    return parts
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     client = get_client()
     try:
-        messages = [{"role": m.role, "content": m.content} for m in request.messages]
+        messages = [{"role": m.role, "content": _serialize_content(m.content)} for m in request.messages]
         result = await client.chat(
             messages=messages,
             model_id=request.model,
@@ -113,7 +129,7 @@ async def chat_stream(request: ChatRequest):
 
     async def event_stream():
         try:
-            messages = [{"role": m.role, "content": m.content} for m in request.messages]
+            messages = [{"role": m.role, "content": _serialize_content(m.content)} for m in request.messages]
             async for chunk in client.chat_stream(
                 messages=messages,
                 model_id=request.model,
@@ -135,3 +151,44 @@ async def chat_stream(request: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/upload/image")
+async def upload_image(file: UploadFile = File(...)):
+    """Upload an image file, returns base64 data URI for use in /chat content parts."""
+    if not file.filename:
+        raise HTTPException(400, "Filename is required")
+
+    content = await file.read()
+    ext = Path(file.filename).suffix.lower().lstrip(".")
+    mime_map = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "bmp": "image/bmp"}
+    mime = mime_map.get(ext, "image/png")
+
+    b64 = base64.b64encode(content).decode()
+    url = f"data:{mime};base64,{b64}"
+
+    return {
+        "filename": file.filename,
+        "mime_type": mime,
+        "size_bytes": len(content),
+        "image_url": url,
+    }
+
+
+@router.get("/images/{filename:path}")
+async def serve_image(filename: str):
+    """Serve a local image as base64 data URI for use in chat."""
+    config = get_config()
+    path = Path(filename)
+    if not path.is_absolute():
+        path = Path("/") / filename
+    if not path.exists():
+        raise HTTPException(404, f"Image not found: {filename}")
+
+    content = path.read_bytes()
+    ext = path.suffix.lower().lstrip(".")
+    mime_map = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
+    mime = mime_map.get(ext, "image/png")
+
+    b64 = base64.b64encode(content).decode()
+    return {"filename": path.name, "mime_type": mime, "image_url": f"data:{mime};base64,{b64}"}

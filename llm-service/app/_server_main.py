@@ -39,14 +39,6 @@ def _register_default_models() -> None:
             max_tokens=2000,
             supports_streaming=True,
         )
-    if config.is_yandex_configured:
-        mm.register_model(
-            model_id="qwen3.6-35b-a3b",
-            display_name="Qwen 3.6 35B (Vision)",
-            max_tokens=8000,
-            supports_streaming=True,
-            supports_vision=True,
-        )
 
 
 async def _initial_health_check() -> None:
@@ -92,8 +84,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="LLM Service — Yandex Model Gateway",
-    description="FastAPI gateway for Yandex AI Studio models via OpenAI-compatible API. Supports Qwen 3.6 Vision.",
-    version="1.1.0",
+    description="FastAPI gateway for Yandex AI Studio models via OpenAI-compatible API",
+    version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

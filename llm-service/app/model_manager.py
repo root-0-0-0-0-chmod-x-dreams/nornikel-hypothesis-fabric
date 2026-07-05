@@ -31,6 +31,7 @@ class ModelManager:
         display_name: str = "",
         max_tokens: int = 1000,
         supports_streaming: bool = True,
+        supports_vision: bool = False,
     ) -> None:
         self._models[model_id] = ModelEntry(
             info=ModelInfo(
@@ -39,6 +40,7 @@ class ModelManager:
                 status=ModelStatus.UNKNOWN,
                 max_tokens=max_tokens,
                 supports_streaming=supports_streaming,
+                supports_vision=supports_vision,
             )
         )
         logger.info("registered_model", extra={"model": model_id})

@@ -83,9 +83,6 @@ class YandexClient:
     def _is_deepseek_model(self, model_id: str) -> bool:
         return model_id == self.config.deepseek_model or model_id.startswith("deepseek-")
 
-    def _is_qwen_model(self, model_id: str) -> bool:
-        return model_id.startswith("qwen")
-
     def _resolve_model(self, model_id: Optional[str] = None) -> str:
         resolved = model_id or self.config.default_model
         if not self._model_manager.is_available(resolved):
@@ -115,15 +112,11 @@ class YandexClient:
         full_model_id = self._model_manager.get_full_model_id(model_id=model_id)
         return self._yandex_client, provider, full_model_id
 
-    def _extract_text(self, response: Any, is_qwen: bool = False) -> str:
+    def _extract_text(self, response: Any) -> str:
         if response.choices and response.choices[0].message:
             content = response.choices[0].message.content
             if content:
                 return str(content)
-
-            reasoning = getattr(response.choices[0].message, "reasoning_content", None)
-            if reasoning:
-                return str(reasoning)
 
         raise YandexLLMError(
             message="LLM response does not contain text output",
@@ -147,7 +140,9 @@ class YandexClient:
     def _extract_usage(self, response: Any) -> Dict[str, int]:
         usage = getattr(response, "usage", None)
         prompt_tokens = self._usage_value(usage, "prompt_tokens", "input_tokens")
-        completion_tokens = self._usage_value(usage, "completion_tokens", "output_tokens")
+        completion_tokens = self._usage_value(
+            usage, "completion_tokens", "output_tokens"
+        )
         total_tokens = self._usage_value(usage, "total_tokens")
         if total_tokens <= 0:
             total_tokens = prompt_tokens + completion_tokens
@@ -219,7 +214,6 @@ class YandexClient:
                 extra={"request_id": request_id, "model": model, "metadata": metadata or {}},
             )
             primary_provider = self._provider_for_model(model)
-            is_qwen = self._is_qwen_model(model)
 
             try:
                 resolved_model, provider, response = await self._chat_once(
@@ -256,7 +250,7 @@ class YandexClient:
                 )
 
             elapsed_ms = (time.monotonic() - start_time) * 1000
-            text = self._extract_text(response, is_qwen=is_qwen)
+            text = self._extract_text(response)
             usage_info = self._extract_usage(response)
 
             logger.info(
@@ -283,10 +277,29 @@ class YandexClient:
             }
 
         except openai.RateLimitError:
+            elapsed_ms = (time.monotonic() - start_time) * 1000
+            logger.warning(
+                "llm_rate_limited",
+                extra={
+                    "request_id": request_id,
+                    "model": model,
+                    "duration_ms": round(elapsed_ms, 1),
+                },
+            )
             await self._model_manager.mark_rate_limited(model)
             raise RateLimitError(model)
 
         except openai.APIConnectionError as e:
+            elapsed_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "llm_connection_error",
+                extra={
+                    "request_id": request_id,
+                    "model": model,
+                    "duration_ms": round(elapsed_ms, 1),
+                    "reason": str(e)[:200],
+                },
+            )
             await self._model_manager.mark_unavailable(model, reason="connection_error")
             raise YandexLLMError(
                 message=f"Connection to LLM API failed: {e}",
@@ -295,6 +308,15 @@ class YandexClient:
             )
 
         except openai.APITimeoutError:
+            elapsed_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "llm_timeout",
+                extra={
+                    "request_id": request_id,
+                    "model": model,
+                    "duration_ms": round(elapsed_ms, 1),
+                },
+            )
             raise YandexLLMError(
                 message=f"LLM API request timed out after {self.config.model_timeout}s",
                 code="TIMEOUT",
@@ -302,11 +324,24 @@ class YandexClient:
             )
 
         except openai.APIStatusError as e:
+            elapsed_ms = (time.monotonic() - start_time) * 1000
+            logger.error(
+                "llm_api_error",
+                extra={
+                    "request_id": request_id,
+                    "model": model,
+                    "status_code": e.status_code,
+                    "duration_ms": round(elapsed_ms, 1),
+                    "reason": str(e)[:200],
+                },
+            )
             if e.status_code == 429:
                 await self._model_manager.mark_rate_limited(model)
                 raise RateLimitError(model)
             if e.status_code >= 500:
-                await self._model_manager.mark_unavailable(model, reason=f"api_error_{e.status_code}")
+                await self._model_manager.mark_unavailable(
+                    model, reason=f"api_error_{e.status_code}"
+                )
             raise YandexLLMError(
                 message=f"LLM API error ({e.status_code}): {e}",
                 code="API_ERROR",
@@ -317,7 +352,15 @@ class YandexClient:
             raise
 
         except Exception as e:
-            logger.exception("llm_unexpected_error", extra={"request_id": request_id, "model": model})
+            elapsed_ms = (time.monotonic() - start_time) * 1000
+            logger.exception(
+                "llm_unexpected_error",
+                extra={
+                    "request_id": request_id,
+                    "model": model,
+                    "duration_ms": round(elapsed_ms, 1),
+                },
+            )
             raise YandexLLMError(
                 message=f"Unexpected error: {e}",
                 code="INTERNAL_ERROR",
@@ -368,6 +411,14 @@ class YandexClient:
                 for event in stream:
                     if event.choices and event.choices[0].delta and event.choices[0].delta.content:
                         yield event.choices[0].delta.content
+                logger.info(
+                    "llm_stream_provider_completed",
+                    extra={
+                        "request_id": request_id,
+                        "model": selected_model,
+                        "provider": provider,
+                    },
+                )
 
             try:
                 async for chunk in stream_from_model(model):
@@ -406,27 +457,45 @@ class YandexClient:
 
         except openai.APIConnectionError as e:
             await self._model_manager.mark_unavailable(model, reason="connection_error")
-            raise YandexLLMError(message=f"Connection to LLM API failed: {e}", code="CONNECTION_ERROR", status=502)
+            raise YandexLLMError(
+                message=f"Connection to LLM API failed: {e}",
+                code="CONNECTION_ERROR",
+                status=502,
+            )
 
         except openai.APIStatusError as e:
             if e.status_code == 429:
                 await self._model_manager.mark_rate_limited(model)
                 raise RateLimitError(model)
             if e.status_code >= 500:
-                await self._model_manager.mark_unavailable(model, reason=f"api_error_{e.status_code}")
-            raise YandexLLMError(message=f"LLM API error ({e.status_code}): {e}", code="API_ERROR", status=e.status_code)
+                await self._model_manager.mark_unavailable(
+                    model, reason=f"api_error_{e.status_code}"
+                )
+            raise YandexLLMError(
+                message=f"LLM API error ({e.status_code}): {e}",
+                code="API_ERROR",
+                status=e.status_code,
+            )
 
         except YandexLLMError:
             raise
 
         except Exception as e:
-            logger.exception("llm_stream_error", extra={"request_id": request_id, "model": model})
-            raise YandexLLMError(message=f"Unexpected streaming error: {e}", code="INTERNAL_ERROR", status=500)
+            logger.exception(
+                "llm_stream_error",
+                extra={"request_id": request_id, "model": model},
+            )
+            raise YandexLLMError(
+                message=f"Unexpected streaming error: {e}",
+                code="INTERNAL_ERROR",
+                status=500,
+            )
 
         finally:
             self._queue.release()
 
     async def probe_model(self, model_id: str) -> bool:
+        """Checks model availability with a minimal request."""
         client, _provider, api_model = self._client_for_model(model_id=model_id)
         try:
             await asyncio.to_thread(

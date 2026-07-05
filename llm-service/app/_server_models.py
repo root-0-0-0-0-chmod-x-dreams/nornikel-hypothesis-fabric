@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,23 +19,12 @@ class ModelInfo(BaseModel):
     status: ModelStatus = ModelStatus.UNKNOWN
     max_tokens: int = 1000
     supports_streaming: bool = True
-    supports_vision: bool = False
     last_checked_at: Optional[str] = None
-
-
-class ImageUrl(BaseModel):
-    url: str = Field(..., min_length=1)
-
-
-class ContentPart(BaseModel):
-    type: str = Field(..., pattern="^(text|image_url)$")
-    text: Optional[str] = None
-    image_url: Optional[ImageUrl] = None
 
 
 class Message(BaseModel):
     role: str = Field(..., pattern="^(system|user|assistant)$")
-    content: Union[str, List[ContentPart]]
+    content: str = Field(..., min_length=1)
 
 
 class ChatRequest(BaseModel):
@@ -56,7 +45,7 @@ class TokenUsage(BaseModel):
 
 class ChatChoice(BaseModel):
     index: int = 0
-    message: Dict[str, Any]
+    message: Message
     finish_reason: Optional[str] = None
 
 

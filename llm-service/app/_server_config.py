@@ -61,7 +61,9 @@ class Config:
         default_factory=lambda: os.getenv("LOG_LEVEL", "INFO")
     )
     log_format: str = field(
-        default_factory=lambda: os.getenv("LOG_FORMAT", "json")
+        default_factory=lambda: os.getenv(
+            "LOG_FORMAT", "json"
+        )
     )
 
     health_check_interval: int = field(
