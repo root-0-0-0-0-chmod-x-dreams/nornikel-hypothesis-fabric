@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import type { ChatMessage, Document } from "@/types";
+import type { ChatMessage } from "@/types";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10);
@@ -11,32 +11,13 @@ export interface ExpertSettings {
   temperature: number;
 }
 
-function buildSystemPrompt(docs: Document[]): string {
-  const parts = [
-    "Ты — ИИ-ассистент «Фабрики гипотез» Норникеля.",
-    "Твоя задача — анализировать предоставленные документы, генерировать проверяемые научные и инженерные гипотезы, ранжировать их по новизне, рискам и ожидаемой ценности.",
-    "Отвечай на русском языке. Используй Markdown для форматирования: заголовки ###, списки, **жирный**, код.",
-  ];
-
-  const readyDocs = docs.filter((d) => d.status === "ready" && d.extractedContent?.markdown);
-  if (readyDocs.length > 0) {
-    parts.push("\n## Загруженные документы\n");
-    for (const doc of readyDocs) {
-      const content = doc.extractedContent!;
-      parts.push(`### ${doc.name}\n\n${content.markdown.substring(0, 8000)}\n`);
-    }
-  }
-
-  return parts.join("\n");
-}
-
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(
-    async (text: string, docs: Document[] = []) => {
+    async (text: string, _docs?: unknown[], settings?: ExpertSettings) => {
       const userMsg: ChatMessage = {
         id: generateId(),
         role: "user",
@@ -57,26 +38,30 @@ export function useChat() {
 
       try {
         abortRef.current = new AbortController();
-        const systemPrompt = buildSystemPrompt(docs);
+
+        const body: Record<string, unknown> = {
+          model: "yandexgpt",
+          messages: [
+            ...messages.map((m) => ({ role: m.role, content: m.content })),
+            { role: "user", content: text },
+          ],
+        };
+
+        if (settings?.temperature != null) {
+          body.temperature = settings.temperature;
+        }
 
         const response = await fetch("/api/v1/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "yandexgpt",
-            messages: [
-              { role: "system", content: systemPrompt },
-              ...messages.map((m) => ({ role: m.role, content: m.content })),
-              { role: "user", content: text },
-            ],
-          }),
+          body: JSON.stringify(body),
           signal: abortRef.current.signal,
         });
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || "Нет ответа от модели";
+        const content = data.choices?.[0]?.message?.content || "";
 
         setMessages((prev) =>
           prev.map((m) =>
@@ -98,7 +83,7 @@ export function useChat() {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsg.id
-                ? { ...m, content: `**Ошибка:** ${(err as Error).message}. Проверьте, запущен ли llm-service.`, isStreaming: false }
+                ? { ...m, content: `**Ошибка:** ${(err as Error).message}`, isStreaming: false }
                 : m,
             ),
           );
