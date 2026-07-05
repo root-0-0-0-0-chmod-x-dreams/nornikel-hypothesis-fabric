@@ -1,4 +1,6 @@
 import { Bot, User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { TypingDots } from "@/components/ui";
 import type { ChatMessage as ChatMessageType } from "@/types";
 import { HypothesisCard } from "./HypothesisCard";
@@ -21,16 +23,18 @@ export function ChatMessage({ message, onSourceClick }: ChatMessageProps) {
       </div>
       <div className={`flex flex-col gap-2 ${isUser ? "items-end max-w-[75%]" : "items-start w-full"}`}>
         <div
-          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm
+          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm markdown-body
             ${isUser
-              ? "bg-accent/90 backdrop-blur-sm text-white rounded-br-md"
+              ? "bg-accent/90 backdrop-blur-sm text-white rounded-br-md [&_a]:text-white/90 [&_code]:bg-white/20 [&_pre]:bg-white/10"
               : "glass text-text rounded-bl-md"
             }`}
         >
           {message.isStreaming && !message.content ? (
             <TypingDots className="py-1" />
           ) : (
-            <div className="whitespace-pre-wrap">{message.content}</div>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {message.content}
+            </ReactMarkdown>
           )}
         </div>
         {message.isStreaming && message.content && (

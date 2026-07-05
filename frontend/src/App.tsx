@@ -4,7 +4,8 @@ import { ChatContainer } from "@/components/chat";
 import { DocumentList, DocumentPreview, DocumentUploadModal } from "@/components/documents";
 import { RoadmapView } from "@/components/roadmap";
 import { useChat, useDocuments } from "@/hooks";
-import { AttentionView } from "@/components/ui";
+import { AttentionView, ExpertSettingsModal } from "@/components/ui";
+import type { ExpertSettings } from "@/hooks/useChat";
 import { Lightbulb, MessageSquare, TrendingUp, Sparkles, Shield, FlaskConical } from "lucide-react";
 import type { Document, Roadmap } from "@/types";
 
@@ -69,12 +70,16 @@ function EmptyChatState({ onSuggestion }: { onSuggestion: (text: string) => void
   );
 }
 
+const DEFAULT_SETTINGS: ExpertSettings = { hypothesisCount: 5, agentCycleDepth: 3, temperature: 0.7 };
+
 export default function App() {
   const { messages, isGenerating, sendMessage } = useChat();
   const { documents, uploading, addByUrl, addByFiles, removeDocument } = useDocuments();
   const [activeTab, setActiveTab] = useState<"chat" | "documents" | "roadmap">("chat");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [previewState, setPreviewState] = useState<{ doc: Document; mode: "info" | "file" | "content" } | null>(null);
+  const [settings, setSettings] = useState<ExpertSettings>(DEFAULT_SETTINGS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const sidebarContent = (() => {
     switch (activeTab) {
@@ -122,7 +127,7 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onAddDocument={() => setUploadModalOpen(true)}
-        onSettingsClick={() => {}}
+        onSettingsClick={() => setSettingsOpen(true)}
         sidebarContent={sidebarContent}
         detailContent={
           previewState ? (
@@ -137,7 +142,7 @@ export default function App() {
       >
         <ChatContainer
           messages={messages}
-          onSend={sendMessage}
+          onSend={(text) => sendMessage(text, documents)}
           onAttach={() => setUploadModalOpen(true)}
           disabled={isGenerating}
           emptyState={<EmptyChatState onSuggestion={sendMessage} />}
@@ -150,6 +155,13 @@ export default function App() {
         onUploadByUrl={addByUrl}
         onUploadByFile={addByFiles}
         uploading={uploading}
+      />
+
+      <ExpertSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onChange={setSettings}
       />
     </>
   );

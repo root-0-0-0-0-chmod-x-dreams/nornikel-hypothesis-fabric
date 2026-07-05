@@ -35,6 +35,8 @@ const typeLabels: Record<string, string> = {
   pdf: "PDF документ",
   docx: "Word документ",
   xlsx: "Excel таблица",
+  xls: "Excel таблица",
+  csv: "CSV таблица",
   url: "Внешняя ссылка",
   image: "Изображение",
   other: "Файл",

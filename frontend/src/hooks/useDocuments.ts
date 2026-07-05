@@ -128,6 +128,23 @@ async function convertFile(file: File): Promise<{ markdown: string; metadata: Re
   };
 }
 
+async function analyzeExcel(file: File): Promise<Record<string, unknown>> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("/api/v1/analyze", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(err.detail || `Ошибка анализа: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export function useDocuments() {
   const [documents, setDocuments] = useState<Document[]>(() => loadDocs());
   const [uploading, setUploading] = useState(false);
@@ -194,6 +211,14 @@ export function useDocuments() {
       if (!file) continue;
       try {
         const result = await convertFile(file);
+        let analysisResult: Record<string, unknown> | undefined;
+        if (doc.type === "xlsx" || doc.type === "xls" || doc.type === "csv") {
+          try {
+            analysisResult = await analyzeExcel(file);
+          } catch {
+            // analysis is optional, don't fail the whole upload
+          }
+        }
         setDocuments((prev) =>
           prev.map((d) =>
             d.id === doc.id
@@ -208,7 +233,7 @@ export function useDocuments() {
                     html: "",
                     metadata: {
                       title: doc.name,
-                      description: null,
+                      description: analysisResult ? JSON.stringify(analysisResult) : null,
                       author: null,
                       siteName: null,
                       language: null,
