@@ -1,20 +1,27 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout";
 import { ChatContainer } from "@/components/chat";
-import { DocumentList, DocumentPreview, DocumentUploadModal } from "@/components/documents";
+import { DocumentPreview, DocumentUploadModal, ContextPanel } from "@/components/documents";
+import { RoadmapView } from "@/components/roadmap";
+import { RoadmapTimeline } from "@/components/roadmap/RoadmapTimeline";
+import { ExpertSettingsModal } from "@/components/settings/ExpertSettingsModal";
 import { useChat, useDocuments } from "@/hooks";
-import { AttentionView, ExpertSettingsModal } from "@/components/ui";
-import type { ExpertSettings } from "@/hooks/useChat";
-import { Lightbulb, MessageSquare, TrendingUp, Sparkles, Shield, FlaskConical, Map } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import type { Document } from "@/types";
+import { AttentionView, Spinner } from "@/components/ui";
+import { canPreviewDocument, defaultPreviewMode } from "@/lib/knowledgeBase";
+import type { GenerationSettings } from "@/types";
+import { Lightbulb, Map, TrendingUp, Sparkles, Shield, FlaskConical } from "lucide-react";
+
+const DEFAULT_SETTINGS: GenerationSettings = {
+  maxHypotheses: 2,
+  agentCycleDepth: 2,
+  temperature: 0.4,
+};
 
 const SUGGESTIONS = [
-  { icon: TrendingUp, color: "accent" as const, text: "Повысить жаропрочность сплава на 15%" },
-  { icon: Sparkles, color: "blue" as const, text: "Снизить себестоимость шихты без потери прочности" },
-  { icon: Shield, color: "green" as const, text: "Увеличить коррозионную стойкость" },
-  { icon: FlaskConical, color: "amber" as const, text: "Оптимизировать режим термообработки" },
+  { icon: TrendingUp, color: "accent" as const, text: "Снизить потери никеля в хвостах флотации ТОФ" },
+  { icon: Sparkles, color: "blue" as const, text: "Повысить извлечение меди без роста CAPEX" },
+  { icon: Shield, color: "green" as const, text: "Снизить переизмельчение пирротина в цикле" },
+  { icon: FlaskConical, color: "amber" as const, text: "Оптимизировать режим гидроциклонной классификации" },
 ];
 
 const colorMap = {
@@ -57,72 +64,144 @@ function EmptyChatState({ onSuggestion }: { onSuggestion: (text: string) => void
   );
 }
 
-const DEFAULT_SETTINGS: ExpertSettings = { hypothesisCount: 5, agentCycleDepth: 3, temperature: 0.7 };
-
 export default function App() {
-  const { messages, isGenerating, sendMessage } = useChat();
-  const { documents, uploading, addByUrl, addByFiles, removeDocument } = useDocuments();
+  const [settings, setSettings] = useState<GenerationSettings>(DEFAULT_SETTINGS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const {
+    messages,
+    isGenerating,
+    sendMessage,
+    selectedHypothesis,
+    selectHypothesis,
+    roadmap,
+    roadmapLoading,
+    retrievedParagraphs,
+  } = useChat(settings);
+  const { knowledgeDocuments, userDocuments, uploading, addByUrl, addByFiles, removeDocument } = useDocuments();
   const [activeTab, setActiveTab] = useState<"chat" | "documents" | "roadmap">("chat");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [previewState, setPreviewState] = useState<{ doc: Document; mode: "info" | "file" | "content" } | null>(null);
-  const [settings, setSettings] = useState<ExpertSettings>(DEFAULT_SETTINGS);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [previewState, setPreviewState] = useState<{ doc: import("@/types").Document; mode: "info" | "file" | "content" } | null>(null);
 
-  const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
+  const openDocumentPreview = (doc: import("@/types").Document, mode?: "info" | "file" | "content") => {
+    setPreviewState({ doc, mode: mode ?? defaultPreviewMode(doc) });
+  };
 
   const sidebarContent = (() => {
     switch (activeTab) {
       case "chat":
         return (
-          <AttentionView
-            icon={<MessageSquare size={24} />}
-            title="Диалог"
-            description="Документы, добавленные в диалог, появятся здесь."
-            variant="gray"
-            size="sm"
-            className="py-6"
+          <ContextPanel
+            knowledgeDocuments={knowledgeDocuments}
+            userDocuments={userDocuments}
+            retrievedParagraphs={retrievedParagraphs}
+            onRemove={removeDocument}
+            onClick={(doc) => openDocumentPreview(doc)}
+            onPreview={(doc) => openDocumentPreview(doc, canPreviewDocument(doc) ? defaultPreviewMode(doc) : "info")}
           />
         );
       case "documents":
         return (
-          <DocumentList
-            documents={documents}
+          <ContextPanel
+            knowledgeDocuments={knowledgeDocuments}
+            userDocuments={userDocuments}
+            retrievedParagraphs={retrievedParagraphs}
             onRemove={removeDocument}
-            onClick={(doc) => setPreviewState({ doc, mode: "info" })}
-            onPreview={(doc) => setPreviewState({ doc, mode: "file" })}
-            emptyMessage="Загрузите документы через кнопку «+»"
+            onClick={(doc) => openDocumentPreview(doc)}
+            onPreview={(doc) => openDocumentPreview(doc, canPreviewDocument(doc) ? defaultPreviewMode(doc) : "info")}
           />
         );
       case "roadmap":
-        return lastAssistantMsg?.content ? (
+        if (!selectedHypothesis) {
+          return (
+            <AttentionView
+              icon={<Map size={24} />}
+              title="Роадмапа"
+              description="Сначала сгенерируйте гипотезы в чате — здесь появится план лабораторной проверки."
+              variant="gray"
+              size="sm"
+              className="py-6"
+            />
+          );
+        }
+        return (
           <div className="flex flex-col gap-3">
             <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider px-1">
-              Результат генерации
+              Гипотеза
             </h3>
-            <div className="prose prose-sm max-w-none dark:prose-invert
-              prose-headings:text-text prose-p:text-text prose-li:text-text
-              prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-xs
-              prose-code:before:content-none prose-code:after:content-none
-              prose-pre:bg-gray-100 prose-pre:rounded-xl prose-pre:border prose-pre:border-border
-              dark:prose-code:bg-gray-800/50 dark:prose-pre:bg-gray-800/50">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {lastAssistantMsg.content}
-              </ReactMarkdown>
-            </div>
+            <p className="text-sm text-text leading-relaxed px-1">{selectedHypothesis.title}</p>
+            {roadmapLoading ? (
+              <div className="flex justify-center py-8">
+                <Spinner />
+              </div>
+            ) : roadmap ? (
+              <div className="flex flex-col gap-3">
+                <RoadmapTimeline steps={roadmap.steps} />
+                {roadmap.sourceDetails && roadmap.sourceDetails.length > 0 && (
+                  <div className="px-1 pt-2 border-t border-border">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted mb-2">
+                      Источники
+                    </p>
+                    <div className="space-y-1">
+                      {roadmap.sourceDetails.slice(0, 3).map((s, i) => (
+                        <p key={`${s.chunkId}-${i}`} className="text-[11px] text-accent leading-snug">
+                          {s.title}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-text-muted px-1">Роадмапа не загружена</p>
+            )}
           </div>
-        ) : (
-          <AttentionView
-            icon={<Map size={24} />}
-            title="Роадмапа"
-            description="Отправьте запрос — результат генерации появится здесь."
-            variant="gray"
-            size="sm"
-            className="py-6"
-          />
         );
       default:
         return null;
     }
+  })();
+
+  const mainContent = (() => {
+    if (activeTab === "roadmap") {
+      if (!selectedHypothesis || !roadmap) {
+        return (
+          <div className="flex items-center justify-center h-full p-8">
+            <AttentionView
+              icon={<Map size={32} />}
+              title="Дорожная карта проверки"
+              description="Отправьте запрос в чате и выберите гипотезу — здесь откроется полный план экспериментов с ресурсами и критериями успеха."
+              variant="accent"
+              size="md"
+            />
+          </div>
+        );
+      }
+      return (
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-3xl mx-auto">
+            <RoadmapView roadmap={roadmap} hypothesisTitle={selectedHypothesis.title} />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <ChatContainer
+        messages={messages}
+        onSend={sendMessage}
+        onAttach={() => setUploadModalOpen(true)}
+        disabled={isGenerating}
+        selectedHypothesisId={selectedHypothesis?.id}
+        onSelectHypothesis={(h) => {
+          selectHypothesis(h);
+        }}
+        generationSettings={{
+          maxHypotheses: settings.maxHypotheses,
+          agentCycleDepth: settings.agentCycleDepth,
+        }}
+        emptyState={<EmptyChatState onSuggestion={sendMessage} />}
+      />
+    );
   })();
 
   return (
@@ -131,26 +210,20 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onAddDocument={() => setUploadModalOpen(true)}
-        onSettingsClick={() => setSettingsOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
         sidebarContent={sidebarContent}
         detailContent={
           previewState ? (
             <DocumentPreview
               document={previewState.doc}
               mode={previewState.mode}
-              onModeChange={(mode) => setPreviewState((prev) => prev ? { ...prev, mode } : null)}
+              onModeChange={(mode) => setPreviewState((prev) => (prev ? { ...prev, mode } : null))}
               onClose={() => setPreviewState(null)}
             />
           ) : undefined
         }
       >
-        <ChatContainer
-          messages={messages}
-          onSend={(text) => sendMessage(text, undefined, settings)}
-          onAttach={() => setUploadModalOpen(true)}
-          disabled={isGenerating}
-          emptyState={<EmptyChatState onSuggestion={(text) => sendMessage(text)} />}
-        />
+        {mainContent}
       </AppLayout>
 
       <DocumentUploadModal
@@ -165,7 +238,7 @@ export default function App() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         settings={settings}
-        onChange={setSettings}
+        onSave={setSettings}
       />
     </>
   );

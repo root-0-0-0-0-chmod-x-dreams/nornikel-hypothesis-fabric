@@ -1,5 +1,8 @@
-import json, uuid, time, logging
-from typing import Optional
+import json
+import logging
+import time
+import uuid
+from typing import Any
 
 import pika
 
@@ -9,12 +12,11 @@ logger = logging.getLogger("hypothesis_factory")
 config = get_config()
 
 
-def query_vector_db(query_text: str, top_k: int = 10) -> list[dict]:
-    """Query the vector database via RabbitMQ RPC (graph_rag_query queue)."""
+def _rpc_call(envelope: dict[str, Any], *, timeout: float = 60) -> dict[str, Any]:
     request_id = str(uuid.uuid4())
     connection = None
     channel = None
-    callback_result = None
+    callback_result: dict[str, Any] | None = None
 
     try:
         credentials = pika.PlainCredentials(config.rabbitmq_user, config.rabbitmq_pass)
@@ -31,12 +33,12 @@ def query_vector_db(query_text: str, top_k: int = 10) -> list[dict]:
         result_queue = channel.queue_declare(queue="", exclusive=True)
         callback_queue = result_queue.method.queue
 
-        def on_response(ch, method, props, body):
+        def on_response(_ch, _method, _props, body):
             nonlocal callback_result
             try:
                 callback_result = json.loads(body.decode())
             except json.JSONDecodeError:
-                callback_result = {"error": "invalid_response", "raw": body.decode()[:500]}
+                callback_result = {"ok": False, "error": "invalid_response", "raw": body.decode()[:500]}
 
         channel.basic_consume(
             queue=callback_queue,
@@ -44,39 +46,28 @@ def query_vector_db(query_text: str, top_k: int = 10) -> list[dict]:
             auto_ack=True,
         )
 
-        payload = {
-            "request_id": request_id,
-            "query": query_text,
-            "top_k": top_k,
-        }
-
         channel.basic_publish(
             exchange="",
             routing_key="graph_rag_query",
             properties=pika.BasicProperties(
                 reply_to=callback_queue,
                 correlation_id=request_id,
+                content_type="application/json",
             ),
-            body=json.dumps(payload, ensure_ascii=False),
+            body=json.dumps(envelope, ensure_ascii=False),
         )
 
-        deadline = time.time() + 15
+        deadline = time.time() + timeout
         while callback_result is None and time.time() < deadline:
             connection.process_data_events(time_limit=1)
 
         if callback_result is None:
-            logger.warning("rabbitmq_timeout", extra={"request_id": request_id})
-            return [{"status": "no_response", "message": "Vector DB query timed out"}]
+            return {"ok": False, "error": "timeout"}
 
-        if "error" in callback_result:
-            logger.warning("rabbitmq_error", extra={"error": callback_result.get("error")})
-            return [{"status": "error", "message": callback_result.get("error", "Unknown")}]
-
-        return callback_result if isinstance(callback_result, list) else [callback_result]
-
+        return callback_result
     except Exception as e:
-        logger.warning("rabbitmq_unavailable", extra={"error": str(e)[:200]})
-        return [{"status": "unavailable", "message": f"Vector DB not reachable: {str(e)[:200]}"}]
+        logger.warning("graphrag_rpc_failed", extra={"error": str(e)[:200]})
+        return {"ok": False, "error": str(e)[:200]}
     finally:
         try:
             if channel and channel.is_open:
@@ -85,3 +76,57 @@ def query_vector_db(query_text: str, top_k: int = 10) -> list[dict]:
                 connection.close()
         except Exception:
             pass
+
+
+def _chunks_from_response(response: dict[str, Any]) -> list[dict]:
+    if not response.get("ok"):
+        error = response.get("error", "GraphRAG RPC failed")
+        return [{"status": "error", "message": error}]
+
+    payload = response.get("payload") or {}
+    chunks = payload.get("chunks") or []
+
+    if not chunks:
+        return [{"status": "empty", "message": "No chunks returned"}]
+
+    return [
+        {
+            "chunk_id": chunk.get("chunk_id"),
+            "text": chunk.get("text", ""),
+            "content": chunk.get("text", ""),
+            "source": chunk.get("source", ""),
+            "score": chunk.get("score"),
+            "citation": chunk.get("citation"),
+        }
+        for chunk in chunks
+    ]
+
+
+def query_vector_db(query_text: str, top_k: int = 10) -> list[dict]:
+    """Query GraphRAG unified RPC (graph_rag_query queue)."""
+    envelope = {
+        "type": "graphrag.query",
+        "payload": {
+            "question": query_text,
+            "retrieval_query": query_text,
+            "k_out": top_k,
+            "auto_bucket": True,
+        },
+    }
+    response = _rpc_call(envelope)
+    if not response.get("ok") and response.get("error") == "timeout":
+        logger.warning("rabbitmq_timeout")
+        return [{"status": "no_response", "message": "GraphRAG query timed out"}]
+    return _chunks_from_response(response)
+
+
+def get_chunk_by_id(chunk_id: str) -> dict[str, Any] | None:
+    """Fetch a single chunk with citation by ID."""
+    envelope = {
+        "type": "chunk.get",
+        "payload": {"chunk_id": chunk_id},
+    }
+    response = _rpc_call(envelope, timeout=30)
+    if not response.get("ok"):
+        return None
+    return response.get("payload")

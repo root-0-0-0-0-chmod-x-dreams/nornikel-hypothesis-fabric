@@ -41,17 +41,17 @@ class Config:
     )
 
     data_processor_url: str = field(
-        default_factory=lambda: os.getenv("DATA_PROCESSOR_URL", "http://194.67.116.167:8005")
+        default_factory=lambda: os.getenv("DATA_PROCESSOR_URL", "http://data-processor:8001")
     )
     content_extraction_url: str = field(
         default_factory=lambda: os.getenv("CONTENT_EXTRACTION_URL", "http://194.67.116.167:8005")
     )
 
     default_hypotheses_count: int = field(
-        default_factory=lambda: int(os.getenv("DEFAULT_HYPOTHESES_COUNT", "3"))
+        default_factory=lambda: int(os.getenv("DEFAULT_HYPOTHESES_COUNT", "2"))
     )
     max_agent_iterations: int = field(
-        default_factory=lambda: int(os.getenv("MAX_AGENT_ITERATIONS", "5"))
+        default_factory=lambda: int(os.getenv("MAX_AGENT_ITERATIONS", "2"))
     )
     agent_timeout: int = field(
         default_factory=lambda: int(os.getenv("AGENT_TIMEOUT", "300"))

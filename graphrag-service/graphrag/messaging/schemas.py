@@ -17,6 +17,7 @@ MSG_NL_CYPHER_QUERY = "nl_cypher.ask"
 MSG_EXTERNAL_INGEST = "external.ingest"
 MSG_INGEST_MARKDOWN = "ingest.markdown"
 MSG_INGEST_BOOTSTRAP = "ingest.bootstrap"
+MSG_CHUNK_GET = "chunk.get"
 
 
 @dataclass
@@ -31,7 +32,21 @@ class Envelope:
     def from_json(cls, raw: str | bytes) -> Envelope:
         data = json.loads(raw)
 
-        return cls(type=str(data["type"]), payload=dict(data.get("payload") or {}))
+        if "type" in data:
+            return cls(type=str(data["type"]), payload=dict(data.get("payload") or {}))
+
+        # Legacy clients: {"query": "...", "top_k": N}
+        if "query" in data or "question" in data:
+            question = str(data.get("question") or data.get("query") or "")
+            payload = {
+                "question": question,
+                "retrieval_query": question,
+                "k_out": int(data.get("top_k") or data.get("k_out") or 8),
+            }
+
+            return cls(type=MSG_UNIFIED_QUERY, payload=payload)
+
+        raise KeyError("type")
 
 
 def chunk_from_payload(payload: dict[str, Any]) -> Chunk:

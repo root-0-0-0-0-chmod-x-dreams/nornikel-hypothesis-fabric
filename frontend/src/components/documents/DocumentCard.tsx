@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { FileText, FileSpreadsheet, Globe, Image, X, Loader, ExternalLink, Eye } from "lucide-react";
+import { FileText, FileSpreadsheet, Globe, Image, X, Loader, ExternalLink, Eye, Lock, Database } from "lucide-react";
 import { Card, Badge, Progress } from "@/components/ui";
 import type { Document } from "@/types";
+import { isPinnedDocument, canPreviewDocument } from "@/lib/knowledgeBase";
 
 interface DocumentCardProps {
   document: Document;
@@ -42,8 +43,10 @@ export function DocumentCard({ document: doc, onRemove, onClick, onPreview }: Do
   const Icon = iconMap[doc.type] || FileText;
   const isProcessing = doc.status === "uploading" || doc.status === "processing";
   const isUrl = doc.type === "url";
+  const pinned = isPinnedDocument(doc);
   const showExternalLink = hasRealUrl(doc.url);
-  const canPreview = !!doc.blobUrl;
+  const canPreview = canPreviewDocument(doc);
+  const canRemove = onRemove && !pinned;
 
   const [progress, setProgress] = useState(0);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -68,9 +71,11 @@ export function DocumentCard({ document: doc, onRemove, onClick, onPreview }: Do
     <Card padding="sm" hover={!!onClick && !isProcessing} onClick={onClick ? () => onClick(doc) : undefined}>
       <div className="flex flex-col gap-2">
         <div className="flex items-start gap-3">
-          <div className={`p-2 rounded-xl ${isProcessing ? "bg-accent-amber-bg" : isUrl ? "bg-accent-blue-bg" : "bg-gray-100"} flex-shrink-0`}>
+          <div className={`p-2 rounded-xl ${isProcessing ? "bg-accent-amber-bg" : pinned ? "bg-accent-bg" : isUrl ? "bg-accent-blue-bg" : "bg-gray-100"} flex-shrink-0`}>
             {isProcessing ? (
               <Loader size={16} className="text-accent-amber animate-spin" />
+            ) : pinned ? (
+              <Database size={16} className="text-accent" />
             ) : (
               <Icon size={16} className={isUrl ? "text-accent-blue" : "text-text-muted"} />
             )}
@@ -78,22 +83,29 @@ export function DocumentCard({ document: doc, onRemove, onClick, onPreview }: Do
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <p className="text-sm font-medium text-text truncate">{doc.name}</p>
-              {isUrl && <Globe size={11} className="text-accent-blue flex-shrink-0" />}
+              {pinned && <Lock size={11} className="text-accent flex-shrink-0" aria-label="Закреплён в GraphRAG" />}
+              {isUrl && !pinned && <Globe size={11} className="text-accent-blue flex-shrink-0" />}
             </div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge variant={statusMap[doc.status].variant}>
-                {statusMap[doc.status].label}
+                {pinned ? "GraphRAG" : statusMap[doc.status].label}
               </Badge>
-              {doc.size && <span className="text-[11px] text-text-muted">{formatSize(doc.size)}</span>}
-              {isUrl && <span className="text-[11px] text-accent-blue">ссылка</span>}
+              {doc.chunkCount != null && (
+                <span className="text-[11px] text-text-muted">{doc.chunkCount.toLocaleString()} чанков</span>
+              )}
+              {doc.size && !doc.chunkCount && <span className="text-[11px] text-text-muted">{formatSize(doc.size)}</span>}
+              {isUrl && !pinned && <span className="text-[11px] text-accent-blue">ссылка</span>}
             </div>
+            {doc.description && (
+              <p className="text-[11px] text-text-muted mt-1 leading-relaxed line-clamp-2">{doc.description}</p>
+            )}
           </div>
           <div className="flex items-center gap-1">
             {canPreview && onPreview && doc.status === "ready" && (
               <button
                 onClick={(e) => { e.stopPropagation(); onPreview(doc); }}
                 className="p-1.5 rounded-xl hover:bg-accent-bg text-text-muted hover:text-accent transition-colors cursor-pointer"
-                title="Посмотреть файл"
+                title={doc.previewAvailable ? "Посмотреть содержимое" : "Посмотреть файл"}
               >
                 <Eye size={14} />
               </button>
@@ -110,9 +122,9 @@ export function DocumentCard({ document: doc, onRemove, onClick, onPreview }: Do
                 <ExternalLink size={14} />
               </a>
             )}
-            {onRemove && (
+            {canRemove && (
               <button
-                onClick={(e) => { e.stopPropagation(); onRemove(doc.id); }}
+                onClick={(e) => { e.stopPropagation(); onRemove!(doc.id); }}
                 className="p-1.5 rounded-xl hover:bg-red-50 text-text-muted hover:text-red-500 transition-colors cursor-pointer"
               >
                 <X size={14} />

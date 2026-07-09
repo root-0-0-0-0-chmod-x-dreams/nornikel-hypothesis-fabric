@@ -1,41 +1,13 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import type { Document, ExtractedContent } from "@/types";
+import { KNOWLEDGE_BASE_DOCUMENTS, isPinnedDocument, mapApiDocument } from "@/lib/knowledgeBase";
+import { USE_MOCK_API } from "@/lib/hypothesis";
 
-const STORAGE_KEY = "nornikel_documents";
+const STORAGE_KEY = "nornikel_user_documents";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10);
 }
-
-const DEMO_DOCS: Document[] = [
-  {
-    id: "d1",
-    name: "Патент RU 2 7XX XXX — Жаропрочный сплав на основе никеля.pdf",
-    type: "pdf",
-    size: 2_450_000,
-    url: "",
-    uploadedAt: new Date("2025-06-15"),
-    status: "ready",
-  },
-  {
-    id: "d2",
-    name: "Smith et al. — Ni-based superalloy creep behavior (2023).pdf",
-    type: "pdf",
-    size: 4_200_000,
-    url: "",
-    uploadedAt: new Date("2025-06-20"),
-    status: "ready",
-  },
-  {
-    id: "d3",
-    name: "Лабораторный журнал — плавки №45-52.xlsx",
-    type: "xlsx",
-    size: 1_800_000,
-    url: "",
-    uploadedAt: new Date("2025-06-28"),
-    status: "ready",
-  },
-];
 
 function serializeDoc(doc: Document): Record<string, unknown> {
   const { blobUrl: _, ...rest } = doc;
@@ -51,28 +23,29 @@ function deserializeDoc(raw: Record<string, unknown>): Document {
     uploadedAt: new Date(raw.uploadedAt as string),
     blobUrl: undefined,
     size: raw.size as number | undefined,
+    origin: "user",
+    pinned: false,
   } as Document;
 }
 
-function loadDocs(): Document[] {
+function loadUserDocs(): Document[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const arr = JSON.parse(raw) as Record<string, unknown>[];
-      if (arr.length > 0) return arr.map(deserializeDoc);
+      return arr.map(deserializeDoc);
     }
   } catch {
-    // corrupted data, fall through to demo
+    // ignore corrupted storage
   }
-  return DEMO_DOCS;
+  return [];
 }
 
-function saveDocs(docs: Document[]) {
+function saveUserDocs(docs: Document[]) {
   try {
-    const serialized = docs.map(serializeDoc);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(docs.map(serializeDoc)));
   } catch {
-    // quota exceeded or other error, silently fail
+    // quota exceeded
   }
 }
 
@@ -107,51 +80,36 @@ async function extractUrl(url: string): Promise<ExtractedContent> {
   };
 }
 
-async function convertFile(file: File): Promise<{ markdown: string; metadata: Record<string, unknown> }> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await fetch("/api/v1/convert", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
-    throw new Error(err.detail || `Ошибка конвертации: ${res.status}`);
+async function fetchKbDocuments(): Promise<Document[]> {
+  if (USE_MOCK_API) return KNOWLEDGE_BASE_DOCUMENTS;
+  try {
+    const res = await fetch("/api/v1/context/documents");
+    if (!res.ok) return KNOWLEDGE_BASE_DOCUMENTS;
+    const data = await res.json();
+    const docs = (data.documents as Record<string, unknown>[]) ?? [];
+    return docs.length ? docs.map(mapApiDocument) : KNOWLEDGE_BASE_DOCUMENTS;
+  } catch {
+    return KNOWLEDGE_BASE_DOCUMENTS;
   }
-
-  const data = await res.json();
-  return {
-    markdown: data.markdown_content || "",
-    metadata: data.metadata || {},
-  };
-}
-
-async function analyzeExcel(file: File): Promise<Record<string, unknown>> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await fetch("/api/v1/analyze", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
-    throw new Error(err.detail || `Ошибка анализа: ${res.status}`);
-  }
-
-  return res.json();
 }
 
 export function useDocuments() {
-  const [documents, setDocuments] = useState<Document[]>(() => loadDocs());
+  const [userDocuments, setUserDocuments] = useState<Document[]>(() => loadUserDocs());
+  const [knowledgeDocuments, setKnowledgeDocuments] = useState<Document[]>(KNOWLEDGE_BASE_DOCUMENTS);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    saveDocs(documents);
-  }, [documents]);
+    saveUserDocs(userDocuments);
+  }, [userDocuments]);
+
+  useEffect(() => {
+    void fetchKbDocuments().then(setKnowledgeDocuments);
+  }, []);
+
+  const allContextDocuments = useMemo(
+    () => [...knowledgeDocuments, ...userDocuments],
+    [knowledgeDocuments, userDocuments],
+  );
 
   const addByUrl = useCallback(async (url: string) => {
     setUploading(true);
@@ -163,12 +121,14 @@ export function useDocuments() {
       url,
       uploadedAt: new Date(),
       status: "processing",
+      origin: "user",
+      pinned: false,
     };
-    setDocuments((prev) => [doc, ...prev]);
+    setUserDocuments((prev) => [doc, ...prev]);
 
     try {
       const content = await extractUrl(url);
-      setDocuments((prev) =>
+      setUserDocuments((prev) =>
         prev.map((d) =>
           d.id === docId
             ? { ...d, status: "ready" as const, extractedContent: content, name: content.title || d.name }
@@ -176,7 +136,7 @@ export function useDocuments() {
         ),
       );
     } catch (err) {
-      setDocuments((prev) =>
+      setUserDocuments((prev) =>
         prev.map((d) =>
           d.id === docId
             ? {
@@ -192,7 +152,7 @@ export function useDocuments() {
     }
   }, []);
 
-  const addByFiles = useCallback(async (files: File[]) => {
+  const addByFiles = useCallback((files: File[]) => {
     setUploading(true);
     const newDocs: Document[] = files.map((file) => ({
       id: generateId(),
@@ -203,74 +163,36 @@ export function useDocuments() {
       blobUrl: URL.createObjectURL(file),
       uploadedAt: new Date(),
       status: "processing" as const,
+      origin: "user",
+      pinned: false,
     }));
-    setDocuments((prev) => [...newDocs, ...prev]);
-
-    for (const doc of newDocs) {
-      const file = files.find((f) => f.name === doc.name && f.size === doc.size);
-      if (!file) continue;
-      try {
-        const result = await convertFile(file);
-        let analysisResult: Record<string, unknown> | undefined;
-        if (doc.type === "xlsx" || doc.type === "xls" || doc.type === "csv") {
-          try {
-            analysisResult = await analyzeExcel(file);
-          } catch {
-            // analysis is optional, don't fail the whole upload
-          }
-        }
-        setDocuments((prev) =>
-          prev.map((d) =>
-            d.id === doc.id
-              ? {
-                  ...d,
-                  status: "ready" as const,
-                  extractedContent: {
-                    title: doc.name,
-                    markdown: result.markdown,
-                    text: result.markdown,
-                    excerpt: result.markdown.substring(0, 280),
-                    html: "",
-                    metadata: {
-                      title: doc.name,
-                      description: analysisResult ? JSON.stringify(analysisResult) : null,
-                      author: null,
-                      siteName: null,
-                      language: null,
-                      canonicalUrl: null,
-                    },
-                    statusCode: 200,
-                  },
-                }
-              : d,
-          ),
-        );
-      } catch (err) {
-        setDocuments((prev) =>
-          prev.map((d) =>
-            d.id === doc.id
-              ? {
-                  ...d,
-                  status: "error" as const,
-                  errorMessage: (err as Error).message || "Не удалось конвертировать файл",
-                }
-              : d,
-          ),
-        );
-      }
-    }
-    setUploading(false);
+    setUserDocuments((prev) => [...newDocs, ...prev]);
+    setTimeout(() => {
+      setUserDocuments((prev) =>
+        prev.map((d) =>
+          newDocs.some((nd) => nd.id === d.id) ? { ...d, status: "ready" as const } : d,
+        ),
+      );
+      setUploading(false);
+    }, 2000);
   }, []);
 
   const removeDocument = useCallback((id: string) => {
-    setDocuments((prev) => {
+    setUserDocuments((prev) => {
       const doc = prev.find((d) => d.id === id);
-      if (doc?.blobUrl) {
-        URL.revokeObjectURL(doc.blobUrl);
-      }
+      if (!doc || isPinnedDocument(doc)) return prev;
+      if (doc.blobUrl) URL.revokeObjectURL(doc.blobUrl);
       return prev.filter((d) => d.id !== id);
     });
   }, []);
 
-  return { documents, uploading, addByUrl, addByFiles, removeDocument };
+  return {
+    knowledgeDocuments,
+    userDocuments,
+    documents: allContextDocuments,
+    uploading,
+    addByUrl,
+    addByFiles,
+    removeDocument,
+  };
 }

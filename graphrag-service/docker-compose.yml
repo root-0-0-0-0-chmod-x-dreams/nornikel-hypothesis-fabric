@@ -19,6 +19,12 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   neo4j:
     image: neo4j:5.26-community
@@ -46,9 +52,16 @@ services:
       NEO4J_URI: bolt://neo4j:7687
       VECTOR_BACKEND: qdrant
       GRAPH_BACKEND: networkx
+      GRAPHRAG_DATA_ROOT: /app/data/case
+      GRAPHRAG_BOOTSTRAP: auto
+      GRAPHRAG_USE_GRAPH_CACHE: "1"
+    volumes:
+      - ./data:/app/data:ro
     depends_on:
-      - rabbitmq
-      - qdrant
+      rabbitmq:
+        condition: service_started
+      qdrant:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

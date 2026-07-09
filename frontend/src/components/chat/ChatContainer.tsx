@@ -2,8 +2,6 @@ import { useEffect, useRef, type ReactNode } from "react";
 import type { ChatMessage as ChatMessageType } from "@/types";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
-import type { AgentNodeData } from "./AgentNode";
-import { GenerationOverlay } from "./GenerationOverlay";
 
 interface ChatContainerProps {
   messages: ChatMessageType[];
@@ -11,12 +9,9 @@ interface ChatContainerProps {
   onAttach: () => void;
   disabled?: boolean;
   emptyState?: ReactNode;
-  generationPhase?: "retrieve" | "generate" | "validate" | "done";
-  generationNodes?: AgentNodeData[];
-  generationProgress?: number;
-  hypothesisCount?: number;
-  cycleDepth?: number;
-  onSourceClick?: (source: string) => void;
+  selectedHypothesisId?: string;
+  onSelectHypothesis?: (hypothesis: import("@/types").Hypothesis) => void;
+  generationSettings?: { maxHypotheses: number; agentCycleDepth: number };
 }
 
 export function ChatContainer({
@@ -25,18 +20,15 @@ export function ChatContainer({
   onAttach,
   disabled = false,
   emptyState,
-  generationPhase,
-  generationNodes = [],
-  generationProgress = 0,
-  hypothesisCount = 5,
-  cycleDepth = 3,
-  onSourceClick,
+  selectedHypothesisId,
+  onSelectHypothesis,
+  generationSettings,
 }: ChatContainerProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, generationNodes]);
+  }, [messages]);
 
   return (
     <div className="flex flex-col h-full">
@@ -44,25 +36,20 @@ export function ChatContainer({
         {messages.length === 0 && emptyState ? (
           <div className="flex items-center justify-center h-full">{emptyState}</div>
         ) : (
-          <div className="flex flex-col gap-6 max-w-3xl mx-auto">
+          <div className="flex flex-col gap-6 max-w-5xl mx-auto w-full">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} message={msg} onSourceClick={onSourceClick} />
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                selectedHypothesisId={selectedHypothesisId}
+                onSelectHypothesis={onSelectHypothesis}
+                generationSettings={generationSettings}
+              />
             ))}
           </div>
         )}
         <div ref={bottomRef} />
       </div>
-
-      {generationPhase && (
-        <GenerationOverlay
-          phase={generationPhase}
-          nodes={generationNodes}
-          progress={generationProgress}
-          hypothesisCount={hypothesisCount}
-          cycleDepth={cycleDepth}
-        />
-      )}
-
       <ChatInput onSend={onSend} onAttach={onAttach} disabled={disabled} />
     </div>
   );

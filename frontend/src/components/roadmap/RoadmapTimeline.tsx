@@ -1,4 +1,4 @@
-import { Check, Play, X, Clock, type LucideIcon } from "lucide-react";
+import { Check, Play, X, Clock, FileText, type LucideIcon } from "lucide-react";
 import type { RoadmapStep } from "@/types";
 
 interface RoadmapTimelineProps {
@@ -45,6 +45,32 @@ export function RoadmapTimeline({ steps, className = "" }: RoadmapTimelineProps)
                   Ресурсы: {step.resources}
                 </span>
               </div>
+              {step.successCriteria && step.successCriteria !== "—" && (
+                <p className="text-[11px] text-accent-green mt-2">
+                  Успех: {step.successCriteria}
+                </p>
+              )}
+              {step.sourceDetails && step.sourceDetails.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted flex items-center gap-1">
+                    <FileText size={11} />
+                    Параграфы
+                  </p>
+                  {step.sourceDetails.map((src, si) => (
+                    <a
+                      key={`${src.chunkId ?? src.title}-${si}`}
+                      href={src.url ?? (src.chunkId ? `/api/v1/sources/chunks/${src.chunkId}` : undefined)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-xs text-accent hover:underline leading-snug"
+                    >
+                      {src.title}
+                      {src.page != null && ` · стр. ${src.page}`}
+                      {src.paragraphIndex != null && ` · §${src.paragraphIndex + 1}`}
+                    </a>
+                  ))}
+                </div>
+              )}
               {step.status === "failed" && step.failureCriteria && (
                 <div className="mt-2 px-3 py-2 bg-red-50 rounded-xl text-xs text-red-600">
                   Причина: {step.failureCriteria}

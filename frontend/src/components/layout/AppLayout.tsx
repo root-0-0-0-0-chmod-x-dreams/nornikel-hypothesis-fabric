@@ -9,7 +9,7 @@ interface AppLayoutProps {
   activeTab: "chat" | "documents" | "roadmap";
   onTabChange: (tab: "chat" | "documents" | "roadmap") => void;
   onAddDocument: () => void;
-  onSettingsClick: () => void;
+  onOpenSettings?: () => void;
 }
 
 const MIN_SIDEBAR = 260;
@@ -32,7 +32,7 @@ export function AppLayout({
   activeTab,
   onTabChange,
   onAddDocument,
-  onSettingsClick,
+  onOpenSettings,
 }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(320);
@@ -81,7 +81,7 @@ export function AppLayout({
         sidebarOpen={sidebarOpen}
         dark={dark}
         onToggleDark={() => setDark(!dark)}
-        onSettingsClick={onSettingsClick}
+        onOpenSettings={onOpenSettings}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar

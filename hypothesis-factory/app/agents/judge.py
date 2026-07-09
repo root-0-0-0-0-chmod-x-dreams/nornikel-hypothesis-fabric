@@ -74,7 +74,7 @@ def critique_hypothesis(hypothesis: dict, actor_result: dict, context: str) -> d
     ]
 
     logger.info("judge_critiquing", extra={"title": hypothesis.get("title", "")[:80]})
-    response = call_llm(messages, temperature=0.3, max_tokens=8000)
+    response = call_llm(messages, temperature=0.3, max_tokens=3072)
 
     result = parse_json_from_text(response)
     if isinstance(result, list):

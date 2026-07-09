@@ -6,10 +6,10 @@ interface HeaderProps {
   sidebarOpen: boolean;
   dark: boolean;
   onToggleDark: () => void;
-  onSettingsClick: () => void;
+  onOpenSettings?: () => void;
 }
 
-export function Header({ onToggleSidebar, sidebarOpen, dark, onToggleDark, onSettingsClick }: HeaderProps) {
+export function Header({ onToggleSidebar, sidebarOpen, dark, onToggleDark, onOpenSettings }: HeaderProps) {
   return (
     <header className="flex items-center justify-between px-4 py-3 glass-strong border-b border-border flex-shrink-0 z-10">
       <div className="flex items-center gap-3">
@@ -39,7 +39,7 @@ export function Header({ onToggleSidebar, sidebarOpen, dark, onToggleDark, onSet
           </button>
         </Tooltip>
         <Tooltip content="Экспертная настройка" position="bottom">
-          <Button variant="ghost" size="sm" onClick={onSettingsClick}>
+          <Button variant="ghost" size="sm" onClick={onOpenSettings}>
             Настройки
           </Button>
         </Tooltip>

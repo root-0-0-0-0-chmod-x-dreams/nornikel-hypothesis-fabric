@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { X, FileText, Globe, ExternalLink, Clock, HardDrive, Info, Eye, FileCode } from "lucide-react";
-import { Badge, Tabs, AttentionView, Progress } from "@/components/ui";
-import type { Document } from "@/types";
+import { Badge, Tabs, AttentionView, Progress, Spinner } from "@/components/ui";
+import type { Document, ExtractedContent } from "@/types";
+import { fetchKbDocumentContent } from "@/api/context";
 
 type PreviewMode = "info" | "file" | "content";
 
@@ -80,14 +81,48 @@ function ProcessingState() {
 
 export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: DocumentPreviewProps) {
   const isUrl = doc.type === "url";
+  const isKb = doc.origin === "knowledge_base";
   const hasRealUrl = isRealUrl(doc.url);
   const canPreviewFile = doc.blobUrl && previewableBlobTypes.includes(doc.type);
-  const hasExtractedContent = !!doc.extractedContent;
-  const content = doc.extractedContent;
+  const [kbContent, setKbContent] = useState<ExtractedContent | null>(null);
+  const [kbLoading, setKbLoading] = useState(false);
+  const [kbError, setKbError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!doc.previewAvailable || !isKb) {
+      setKbContent(null);
+      setKbError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setKbLoading(true);
+    setKbError(null);
+
+    fetchKbDocumentContent(doc.id)
+      .then((content) => {
+        if (!cancelled) setKbContent(content);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setKbError(err.message || "Не удалось загрузить превью");
+      })
+      .finally(() => {
+        if (!cancelled) setKbLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [doc.id, doc.previewAvailable, isKb]);
+
+  const content = doc.extractedContent || kbContent;
+  const hasExtractedContent = !!content;
 
   const viewTabs = [
     { id: "info", label: "Инфо", icon: <Info size={14} /> },
-    ...(hasExtractedContent ? [{ id: "content" as const, label: "Контент", icon: <FileCode size={14} /> }] : []),
+    ...(hasExtractedContent || (doc.previewAvailable && isKb)
+      ? [{ id: "content" as const, label: "Контент", icon: <FileCode size={14} /> }]
+      : []),
     ...(canPreviewFile ? [{ id: "file" as const, label: "Файл", icon: <Eye size={14} /> }] : []),
   ];
 
@@ -132,30 +167,46 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
           title={doc.name}
           className="flex-1 w-full border-0 bg-white"
         />
-      ) : mode === "content" && content ? (
+      ) : mode === "content" ? (
         <div className="flex-1 overflow-y-auto">
-          {content.metadata.title && (
-            <div className="px-5 pt-5 pb-3">
-              <h2 className="text-base font-bold text-text">{content.metadata.title}</h2>
-              {content.metadata.author && (
-                <p className="text-xs text-text-muted mt-1">{content.metadata.author}</p>
-              )}
-              {content.metadata.siteName && (
-                <p className="text-xs text-accent-blue mt-0.5">{content.metadata.siteName}</p>
-              )}
+          {kbLoading ? (
+            <div className="flex justify-center py-16">
+              <Spinner />
             </div>
+          ) : kbError ? (
+            <div className="p-5">
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600">
+                {kbError}
+              </div>
+            </div>
+          ) : content ? (
+            <>
+              {content.metadata.title && (
+                <div className="px-5 pt-5 pb-3">
+                  <h2 className="text-base font-bold text-text">{content.metadata.title}</h2>
+                  {content.metadata.author && (
+                    <p className="text-xs text-text-muted mt-1">{content.metadata.author}</p>
+                  )}
+                  {content.metadata.siteName && (
+                    <p className="text-xs text-accent-blue mt-0.5">{content.metadata.siteName}</p>
+                  )}
+                </div>
+              )}
+              <div className="px-5 pb-5">
+                <div className="prose prose-sm max-w-none dark:prose-invert
+                  prose-pre:bg-gray-100 prose-pre:rounded-xl prose-pre:border prose-pre:border-border
+                  prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-xs prose-code:before:content-none prose-code:after:content-none
+                  dark:prose-pre:bg-gray-800/50 dark:prose-code:bg-gray-800/50
+                ">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {content.markdown}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="p-5 text-xs text-text-muted">Контент недоступен</div>
           )}
-          <div className="px-5 pb-5">
-            <div className="prose prose-sm max-w-none dark:prose-invert
-              prose-pre:bg-gray-100 prose-pre:rounded-xl prose-pre:border prose-pre:border-border
-              prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-xs prose-code:before:content-none prose-code:after:content-none
-              dark:prose-pre:bg-gray-800/50 dark:prose-code:bg-gray-800/50
-            ">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content.markdown}
-              </ReactMarkdown>
-            </div>
-          </div>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-5">
@@ -214,11 +265,13 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
             ) : doc.status === "ready" ? (
               <AttentionView
                 icon={<FileText size={32} />}
-                title="Файл сохранён в системе"
+                title={isKb ? "Документ базы знаний" : "Файл сохранён в системе"}
                 description={
-                  canPreviewFile
-                    ? "Документ готов к использованию. Нажмите «Файл» для просмотра содержимого."
-                    : "Документ загружен и готов к использованию в генерации гипотез."
+                  doc.previewAvailable
+                    ? "Нажмите «Контент» для просмотра текста документа."
+                    : canPreviewFile
+                      ? "Документ готов к использованию. Нажмите «Файл» для просмотра содержимого."
+                      : "Документ загружен и готов к использованию в генерации гипотез."
                 }
                 variant="green"
                 size="md"
@@ -253,8 +306,14 @@ export function DocumentPreview({ document: doc, mode, onModeChange, onClose }: 
                 </dd>
                 <dt className="text-[11px] text-text-muted">Источник</dt>
                 <dd className="text-[11px] text-text">
-                  {isUrl ? "Внешняя ссылка" : "Локальная загрузка"}
+                  {isKb ? "База знаний GraphRAG" : isUrl ? "Внешняя ссылка" : "Локальная загрузка"}
                 </dd>
+                {doc.indexedInGraphRag === false && (
+                  <>
+                    <dt className="text-[11px] text-text-muted">Индексация</dt>
+                    <dd className="text-[11px] text-text">Справочный (не в Qdrant)</dd>
+                  </>
+                )}
                 {hasRealUrl && (
                   <>
                     <dt className="text-[11px] text-text-muted">Ссылка</dt>

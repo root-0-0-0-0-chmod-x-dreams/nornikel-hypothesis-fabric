@@ -5,6 +5,8 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+ENV GRAPHRAG_DATA_ROOT=/app/data/case
+ENV GRAPHRAG_BOOTSTRAP=auto
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -18,4 +20,4 @@ COPY scripts/ scripts/
 COPY assets/ assets/
 COPY data/ data/
 
-CMD ["python3", "scripts/rmq_worker.py"]
+CMD ["python3", "scripts/docker_entrypoint.py"]

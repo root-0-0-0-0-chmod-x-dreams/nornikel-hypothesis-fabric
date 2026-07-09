@@ -67,8 +67,13 @@ class GraphRagWorker:
         properties: pika.BasicProperties,
         body: bytes,
     ) -> None:
-        envelope = Envelope.from_json(body)
-        response = self._handler.handle(envelope)
+        try:
+            envelope = Envelope.from_json(body)
+            response = self._handler.handle(envelope)
+        except Exception:
+            logger.exception("failed to handle message on %s", method.routing_key)
+            response = {"ok": False, "error": "invalid or unsupported message format"}
+
         self._maybe_reply(channel, properties, response)
         channel.basic_ack(delivery_tag=method.delivery_tag)
 

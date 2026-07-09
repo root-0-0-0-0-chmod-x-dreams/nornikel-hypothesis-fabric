@@ -11,6 +11,7 @@ from graphrag.ingestion.md_ingest import apply_md_ingest, ingest_markdown_docume
 from graphrag.ingestion.graph_cache import invalidate_graph_cache
 from graphrag.ingestion.pipeline import load_knowledge_base
 from graphrag.messaging.schemas import (
+    MSG_CHUNK_GET,
     MSG_CHUNK_UPSERT,
     MSG_EXTERNAL_INGEST,
     MSG_GRAPH_RAG_QUERY,
@@ -32,9 +33,8 @@ from graphrag.unified_query import (
     unified_request_from_payload,
     unified_result_to_dict,
 )
+from graphrag.provenance.citations import citation_from_chunk
 from graphrag.vector_protocol import VectorStoreProtocol
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -81,6 +81,7 @@ class MessageHandler:
 
     def handle(self, envelope: Envelope) -> dict:
         handlers = {
+            MSG_CHUNK_GET: self._handle_chunk_get,
             MSG_CHUNK_UPSERT: self._handle_chunk_upsert,
             MSG_GRAPH_TRIPLET: self._handle_graph_triplet,
             MSG_GRAPH_RAG_QUERY: self._handle_unified_query,
@@ -101,6 +102,27 @@ class MessageHandler:
             logger.exception("handler failed for %s", envelope.type)
 
             return err_response(str(exc))
+
+    def _handle_chunk_get(self, payload: dict) -> dict:
+        chunk_id = str(payload.get("chunk_id") or "")
+        if not chunk_id:
+            return err_response("chunk_id required")
+
+        chunk = self._ctx.vectors.get(chunk_id)
+        if chunk is None:
+            return err_response(f"chunk not found: {chunk_id}")
+
+        citation = citation_from_chunk(chunk)
+        return ok_response(
+            {
+                "chunk_id": chunk.chunk_id,
+                "text": chunk.text,
+                "source": chunk.source,
+                "chunk_type": chunk.chunk_type,
+                "metadata": chunk.metadata,
+                "citation": citation.to_dict(),
+            }
+        )
 
     def _handle_chunk_upsert(self, payload: dict) -> dict:
         chunk = chunk_from_payload(payload)

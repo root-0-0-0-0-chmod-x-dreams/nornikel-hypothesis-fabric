@@ -8,6 +8,9 @@ from app.config import get_config
 logger = logging.getLogger("hypothesis_factory")
 config = get_config()
 
+if False:  # TYPE_CHECKING
+    from app.progress import ProgressEmitter
+
 GENERATOR_SYSTEM = """Ты — ведущий научный сотрудник НИИ обогащения полезных ископаемых с 30-летним опытом работы на Норильской обогатительной фабрике. Твоя специализация — анализ потерь в хвостах флотации и генерация технологических гипотез по их снижению.
 
 Ты работаешь в системе «Фабрика гипотез» и твоя задача — на основе предоставленных данных (анализ потерь, документы по флотации, схемы, учебники, веб-источники) сгенерировать конкретные, проверяемые технологические гипотезы.
@@ -42,12 +45,21 @@ def generate_hypotheses(
     analysis_data: str = "",
     image_descriptions: list[str] | None = None,
     num_hypotheses: int | None = None,
-) -> list[dict]:
+    progress: "ProgressEmitter | None" = None,
+) -> tuple[list[dict], list[dict]]:
     """Agent 1: Generate hypotheses from query + documents + analysis data."""
 
     num = num_hypotheses or config.default_hypotheses_count
 
-    # Step 1: Retrieve relevant chunks from vector DB
+    retrieve_step = None
+    if progress:
+        retrieve_step = progress.agent_step(
+            agent="generator",
+            title="GraphRAG: поиск релевантных параграфов",
+            summary=f"Запрос: {query[:120]}",
+            detail="Qdrant + граф знаний: LossForm, учебники, регламенты",
+        )
+
     logger.info("agent1_retrieving", extra={"query": query[:100]})
     retrieved = query_vector_db(query, top_k=5)
     retrieved_text = ""
@@ -56,6 +68,25 @@ def generate_hypotheses(
             r.get("content", r.get("text", json.dumps(r, ensure_ascii=False)[:500]))
             for r in retrieved[:5]
         )
+
+    if progress and retrieve_step:
+        chunk_count = len([r for r in retrieved if not r.get("status")])
+        progress.agent_step(
+            agent="generator",
+            title="GraphRAG: поиск релевантных параграфов",
+            summary=f"Найдено {chunk_count} релевантных фрагментов",
+            detail=retrieved_text[:800] if retrieved_text else "Контекст из базы знаний",
+            status="done",
+            step_id=retrieve_step,
+        )
+        generate_step = progress.agent_step(
+            agent="generator",
+            title=f"Generator: формирование {num} гипотез",
+            summary="DeepSeek LLM анализирует контекст",
+            detail="Генерация разнообразных технологических гипотез",
+        )
+    else:
+        generate_step = None
 
     # Step 2: Build context
     context_parts = [f"# Запрос пользователя\n{query}"]
@@ -83,11 +114,23 @@ def generate_hypotheses(
     ]
 
     logger.info("agent1_generating", extra={"num": num})
-    response = call_llm(messages, temperature=0.8, max_tokens=8000)
+    response = call_llm(messages, temperature=0.8, max_tokens=4096)
 
     hypotheses = parse_json_from_text(response)
     if isinstance(hypotheses, dict):
         hypotheses = [hypotheses]
 
-    logger.info("agent1_done", extra={"count": len(hypotheses)})
-    return hypotheses
+    logger.info("agent1_done", extra={"count": len(hypotheses), "retrieved": len(retrieved)})
+
+    if progress and generate_step:
+        titles = "; ".join(str(h.get("title", ""))[:60] for h in hypotheses[:3])
+        progress.agent_step(
+            agent="generator",
+            title=f"Generator: формирование {num} гипотез",
+            summary=f"Сгенерировано {len(hypotheses)} гипотез",
+            detail=titles,
+            status="done",
+            step_id=generate_step,
+        )
+
+    return hypotheses, retrieved

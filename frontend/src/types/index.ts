@@ -1,9 +1,20 @@
+export interface HypothesisSource {
+  title: string;
+  url?: string;
+  type?: string;
+  excerpt?: string;
+  chunkId?: string;
+  page?: number;
+  paragraphIndex?: number;
+}
+
 export interface Hypothesis {
   id: string;
   title: string;
   description: string;
   rationale: string;
   sources: string[];
+  sourceDetails?: HypothesisSource[];
   novelty: "high" | "medium" | "low";
   noveltyRationale?: string;
   confidence?: number;
@@ -40,6 +51,15 @@ export interface Document {
   uploadedAt: Date;
   status: "uploading" | "processing" | "ready" | "error";
   errorMessage?: string;
+  /** Fixed in GraphRAG/Qdrant context — cannot be removed */
+  pinned?: boolean;
+  origin?: "user" | "knowledge_base";
+  chunkCount?: number;
+  description?: string;
+  /** KB document can be previewed via /context/documents/{id}/content */
+  previewAvailable?: boolean;
+  previewKind?: "book" | "scheme" | "regulation" | "spreadsheet" | "document";
+  indexedInGraphRag?: boolean;
 }
 
 export interface ChatMessage {
@@ -48,8 +68,26 @@ export interface ChatMessage {
   content: string;
   attachments?: Document[];
   hypotheses?: Hypothesis[];
+  agentSteps?: AgentStep[];
   timestamp: Date;
   isStreaming?: boolean;
+  generationElapsed?: number;
+}
+
+export interface AgentStep {
+  id: string;
+  agent: "generator" | "actor" | "judge";
+  title: string;
+  summary: string;
+  detail: string;
+  timestamp: number;
+  status: "pending" | "running" | "done";
+}
+
+export interface GenerationSettings {
+  maxHypotheses: number;
+  agentCycleDepth: number;
+  temperature: number;
 }
 
 export interface RoadmapStep {
@@ -62,6 +100,7 @@ export interface RoadmapStep {
   successCriteria: string;
   failureCriteria: string;
   status: "pending" | "in_progress" | "completed" | "failed";
+  sourceDetails?: HypothesisSource[];
 }
 
 export interface Roadmap {
@@ -70,6 +109,7 @@ export interface Roadmap {
   steps: RoadmapStep[];
   totalDuration: string;
   totalResources: string;
+  sourceDetails?: HypothesisSource[];
 }
 
 export interface QueryContext {
